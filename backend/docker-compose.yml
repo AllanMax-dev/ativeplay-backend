@@ -1,0 +1,49 @@
+name: ativeplay
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ativeplay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ativeplay}
+      POSTGRES_DB: ${POSTGRES_DB:-ativeplay}
+      TZ: America/Sao_Paulo
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ativeplay} -d ${POSTGRES_DB:-ativeplay}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    profiles: ['api']
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+      UPLOAD_DIR: /app/storage
+      SERVER_PORT: 8080
+    ports:
+      - '${SERVER_PORT:-8080}:8080'
+    volumes:
+      - uploads:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  adminer:
+    image: adminer:5
+    profiles: ['tools']
+    ports:
+      - '8081:8080'
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
+  uploads:

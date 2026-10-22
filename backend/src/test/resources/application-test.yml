@@ -1,0 +1,10 @@
+# Perfil dos testes de integração: o banco vem do Testcontainers (@ServiceConnection).
+ativeplay:
+  cors-origins: http://localhost
+  jwt:
+    secret: segredo-de-teste-com-mais-de-32-caracteres-123456
+    access-ttl: 15m
+    refresh-ttl-dias: 30
+  encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  upload-dir: target/storage-test
+  jobs-enabled: false

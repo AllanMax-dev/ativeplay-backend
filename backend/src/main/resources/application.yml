@@ -1,0 +1,91 @@
+# Valores vêm do arquivo .env (o mesmo usado pelo docker-compose.yml) ou de variáveis de ambiente.
+spring:
+  application:
+    name: ativeplay-api
+  config:
+    import: optional:file:.env[.properties]
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:ativeplay}
+    username: ${POSTGRES_USER:ativeplay}
+    password: ${POSTGRES_PASSWORD:ativeplay}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # o schema é das migrations Flyway; o Hibernate só confere o mapeamento
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        jdbc.batch_size: 50
+        order_inserts: true
+  flyway:
+    locations: classpath:db/migration
+  data:
+    web:
+      pageable:
+        page-parameter: pagina
+        size-parameter: porPagina
+        one-indexed-parameters: true
+        default-page-size: 20
+        max-page-size: 100
+  servlet:
+    multipart:
+      max-file-size: ${UPLOAD_MAX_MB:20}MB
+      max-request-size: 100MB
+  jackson:
+    default-property-inclusion: non_absent
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+  web:
+    locale: pt_BR
+    locale-resolver: fixed
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never
+  forward-headers-strategy: framework
+
+ativeplay:
+  cors-origins: ${CORS_ORIGINS:http://localhost:5173}
+  jwt:
+    secret: ${JWT_ACCESS_SECRET}
+    access-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh-ttl-dias: ${JWT_REFRESH_TTL_DAYS:30}
+  encryption-key: ${ENCRYPTION_KEY}
+  upload-dir: ${UPLOAD_DIR:./storage}
+  jobs-enabled: ${JOBS_ENABLED:true}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /docs
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    br.com.ativeplay: INFO
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+logging:
+  level:
+    br.com.ativeplay: DEBUG

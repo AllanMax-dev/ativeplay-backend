@@ -1,1 +1,144 @@
-# ativeplay-backend
+# Ative Play — API
+
+API REST da plataforma Ative Play: gestão operacional multi-tenant para escritórios de BPO Financeiro e Contabilidade.
+
+| | |
+| --- | --- |
+| Linguagem | Java 21 (LTS) |
+| Framework | Spring Boot 3.5 (Web, Data JPA, Security, Validation, Actuator) |
+| Banco de dados | PostgreSQL 16 (Docker) |
+| Migrations | Flyway (SQL versionado) |
+| Autenticação | JWT de acesso (15 min, HS256) + refresh token com rotação |
+| Documentação | OpenAPI/Swagger UI em `/docs` |
+| Testes | JUnit 5 + AssertJ (unitários) e Testcontainers (integração com Postgres real) |
+| Build | Maven (wrapper incluso: `./mvnw`) |
+
+## Como executar
+
+Requisitos: **JDK 21+** e **Docker**. Maven não é necessário (use `./mvnw`, ou `mvnw.cmd` no Windows).
+
+```bash
+cd backend
+cp .env.example .env                                       # ajuste segredos se quiser
+docker compose up -d db                                    # Postgres em 127.0.0.1:5432
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev,seed # cria as tabelas, carrega a demo e sobe a API
+```
+
+- API: http://localhost:8080/api/v1
+- Documentação interativa: http://localhost:8080/docs
+- Saúde: http://localhost:8080/actuator/health
+
+Nas próximas vezes, `./mvnw spring-boot:run` basta (o perfil `seed` recria o escritório de demonstração a cada inicialização).
+
+A aplicação lê o mesmo `.env` usado pelo Docker Compose. Para subir **tudo em containers**: `docker compose --profile api up -d --build`. Cliente SQL web: `docker compose --profile tools up -d adminer` → http://localhost:8081 (servidor `db`).
+
+> No Windows com WSL, um Postgres do WSL pode ocupar `localhost:5432`; por isso a conexão usa `127.0.0.1`. Se a porta estiver ocupada, troque `POSTGRES_PORT` no `.env`.
+
+### Acessos de demonstração
+
+Senha de todos: `Ativeplay@123`
+
+| E-mail | Perfil | O que vê |
+| --- | --- | --- |
+| admin@ativeplay.dev | ADMIN | Tudo, inclusive usuários, permissões e configurações |
+| gestor@ativeplay.dev | GESTOR | Toda a operação, CRM e relatórios |
+| operador@ativeplay.dev | OPERADOR | Só as empresas da sua carteira |
+| operador2@ativeplay.dev | OPERADOR | Outra carteira |
+| cliente@ativeplay.dev | CLIENTE | Portal da empresa Pão Dourado |
+
+## Arquitetura
+
+Organização **por domínio** (package-by-feature), com camadas dentro de cada módulo:
+
+```text
+backend/
+├── docker-compose.yml           # Postgres (+ API e Adminer por profile)
+├── Dockerfile                   # build multi-stage (Maven → JRE 21)
+├── pom.xml  mvnw  mvnw.cmd
+├── docs/banco-de-dados.md       # decisões, diagrama ER e dicionário das tabelas
+└── src/
+    ├── main/java/br/com/ativeplay/
+    │   ├── AtivePlayApplication.java
+    │   ├── config/              # segurança (JWT), OpenAPI, MVC, propriedades validadas
+    │   ├── shared/              # código transversal, sem regra de negócio
+    │   │   ├── seguranca/       # UsuarioAutenticado, @RequerModulo, @Perfis, AcessoInterceptor
+    │   │   ├── escopo/          # isolamento por tenant e carteira de empresas
+    │   │   ├── erro/            # ApiException + respostas ProblemDetail (RFC 9457)
+    │   │   ├── dominio/         # superclasses de entidade (id, criado_em, atualizado_em)
+    │   │   ├── armazenamento/   # arquivos em disco (trocável por S3)
+    │   │   ├── util/ validacao/ web/
+    │   ├── modules/<domínio>/
+    │   │   ├── domain/          # entidades JPA e enums
+    │   │   ├── repository/      # Spring Data JPA
+    │   │   ├── service/         # regras de negócio e transações
+    │   │   └── web/             # controllers REST e DTOs (records + Bean Validation)
+    │   └── seed/                # dados de demonstração (perfil "seed")
+    ├── main/resources/
+    │   ├── application.yml
+    │   └── db/migration/        # migrations Flyway (V1__schema_inicial.sql, ...)
+    └── test/                    # unitários + integração (Testcontainers)
+```
+
+| Módulo | Responsabilidade |
+| --- | --- |
+| `auth` | Cadastro de escritório (onboarding), login, refresh com rotação, logout, `me`, troca de senha |
+| `escritorio` | Dados do tenant e matriz de permissões por perfil |
+| `usuario`, `setor` | Equipe, perfis, setores e carteira de empresas |
+| `empresa` | Clientes do escritório (CNPJ alfanumérico) e equipe responsável |
+| `tarefa` | Padrões → definições recorrentes → ocorrências diárias; cronômetro, SLA, comentários, agendador |
+| `sessao` | Sessões de trabalho por empresa |
+| `documento` | Upload/download de documentos e anexos de tarefas |
+| `crm` | Funil (etapas), oportunidades, atividades e conversão em empresa |
+| `integracao` | Conta Azul / Omie com credenciais cifradas e histórico de sincronização |
+| `painel` | Indicadores do dia, SLA, produtividade, MRR e pipeline |
+| `portal` | Rotas do cliente final (tarefas visíveis e troca de documentos) |
+| `notificacao`, `auditoria` | Sino de avisos e trilha de auditoria |
+
+### Segurança e multi-tenancy
+
+- Todas as rotas exigem `Authorization: Bearer <token>`, exceto cadastro, login, refresh, logout, `/docs` e `/actuator/health`.
+- O token carrega `escritorioId` e `perfil`; **toda consulta é filtrada pelo escritório do token**, nunca por um id vindo do cliente.
+- `@RequerModulo(Modulo.X)` verifica a matriz `permissoes_perfil` (GET exige leitura; demais métodos, escrita). ADMIN tem acesso total.
+- OPERADOR só acessa as empresas da sua carteira (`EscopoService`). CLIENTE só acessa `/api/v1/portal/**`.
+- Senhas com BCrypt (custo 12); refresh tokens guardados como hash SHA-256 e rotacionados (reuso de token antigo revoga todas as sessões); credenciais de ERP cifradas com AES-256-GCM.
+- Mutações relevantes são registradas na tabela `auditoria`.
+
+### Rotinas agendadas
+
+Com `JOBS_ENABLED=true`:
+- **00:05 (horário de Brasília)** e na inicialização: gera as ocorrências do dia a partir das definições ativas (idempotente).
+- **A cada minuto:** marca `sla_violado` nas ocorrências abertas com prazo vencido e notifica os responsáveis.
+
+Com mais de uma instância da API, deixe `JOBS_ENABLED=true` em apenas uma (ou adote ShedLock).
+
+## Testes
+
+```bash
+./mvnw test
+```
+
+Os testes de integração sobem um PostgreSQL 16 temporário via Testcontainers (Docker precisa estar rodando) e exercitam a API de ponta a ponta: autenticação, rotação de sessão, isolamento entre escritórios, carteira do operador e portal do cliente.
+
+## Convenções da API
+
+- Prefixo `/api/v1`; JSON em `camelCase`; mensagens em português.
+- Erros no formato ProblemDetail: `{ "status": 400, "detail": "Dados inválidos", "campos": { "cnpj": "CNPJ inválido" } }`.
+- Listagens paginadas: `?pagina=1&porPagina=20` → `{ dados, total, pagina, porPagina }` (máx. 100 por página).
+- Datas de competência em `yyyy-mm-dd`; instantes em ISO 8601 UTC.
+- Valores monetários (`honorarioMensal`, `valorMensal`) como número decimal.
+- CNPJ aceito com ou sem máscara, inclusive alfanumérico; armazenado sem pontuação.
+
+## Variáveis de ambiente
+
+| Variável | Padrão | Descrição |
+| --- | --- | --- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | `ativeplay` / — / `ativeplay` / `5432` | Banco (compartilhado com o Compose) |
+| `DB_HOST` | `127.0.0.1` | Host do banco (`db` dentro do Compose) |
+| `SERVER_PORT` | `8080` | Porta HTTP |
+| `JWT_ACCESS_SECRET` | — | Segredo HS256, mínimo 32 caracteres |
+| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL_DAYS` | `15m` / `30` | Validade dos tokens |
+| `ENCRYPTION_KEY` | — | 32 bytes em base64 para cifrar credenciais de ERP (`openssl rand -base64 32`) |
+| `UPLOAD_DIR` | `./storage` | Pasta dos arquivos enviados |
+| `UPLOAD_MAX_MB` | `20` | Tamanho máximo por arquivo |
+| `CORS_ORIGINS` | `http://localhost:5173` | Origens do frontend, separadas por vírgula |
+| `JOBS_ENABLED` | `true` | Liga as rotinas agendadas |
