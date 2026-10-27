@@ -4,9 +4,13 @@ import br.com.ativeplay.shared.erro.ApiException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.HttpStatus;
+import java.util.concurrent.ThreadLocalRandom;
 
-/** Comportamento comum: validação das chaves obrigatórias e chamadas ainda não implementadas. */
+/**
+ * Comportamento comum: validação das chaves obrigatórias e provedor SIMULADO. Não há chamada à
+ * API real do ERP (sem sandbox): a conexão é aceita se as credenciais estão completas e a
+ * sincronização apenas finge buscar dados, devolvendo uma contagem plausível de registros.
+ */
 abstract class ProvedorErpBase implements ProvedorErp {
 
     protected abstract List<String> chavesObrigatorias();
@@ -24,14 +28,24 @@ abstract class ProvedorErpBase implements ProvedorErp {
     }
 
     @Override
+    public boolean simulado() {
+        return true;
+    }
+
+    @Override
     public void testarConexao(Map<String, String> credenciais) {
-        // TODO: chamar a API real do provedor. Por enquanto só o formato das credenciais é verificado.
+        // SIMULADO: só o formato das credenciais é verificado.
         validarCredenciais(credenciais);
     }
 
     @Override
     public int sincronizar(Map<String, String> credenciais, String recurso, Instant desde) {
-        // TODO: implementar o cliente HTTP do provedor. Não simulamos sucesso para não mascarar a pendência.
-        throw new ApiException(HttpStatus.NOT_IMPLEMENTED, "Sincronização com " + nome() + " ainda não implementada");
+        // SIMULADO: carga completa traz dezenas/centenas de registros; sincronização incremental, poucos.
+        return desde == null ? sortear(40, 400) : sortear(1, 30);
+    }
+
+    /** Ponto de sorteio isolado para os testes. */
+    protected int sortear(int minimo, int maximo) {
+        return ThreadLocalRandom.current().nextInt(minimo, maximo + 1);
     }
 }
