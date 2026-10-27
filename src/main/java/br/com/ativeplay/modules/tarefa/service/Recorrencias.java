@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Decide se uma regra de recorrência gera ocorrência em uma data. Considera fins de
- * semana como dias não úteis; feriados ainda não são tratados.
+ * semana e feriados nacionais como dias não úteis.
  */
 public final class Recorrencias {
 
