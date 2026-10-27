@@ -9,7 +9,6 @@ import br.com.ativeplay.modules.auth.web.dto.AuthDtos.LoginRequest;
 import br.com.ativeplay.modules.auth.web.dto.AuthDtos.RefreshRequest;
 import br.com.ativeplay.modules.auth.web.dto.AuthDtos.RegistrarEscritorioRequest;
 import br.com.ativeplay.modules.auth.web.dto.AuthDtos.SessaoResponse;
-import br.com.ativeplay.shared.erro.ApiException;
 import br.com.ativeplay.shared.seguranca.Perfil;
 import br.com.ativeplay.shared.seguranca.Perfis;
 import br.com.ativeplay.shared.seguranca.UsuarioAutenticado;
@@ -18,6 +17,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,24 +55,15 @@ public class AuthController {
     public SessaoResponse registrar(@Valid @RequestBody RegistrarEscritorioRequest req, HttpServletRequest http) {
         var chave = "cadastro:" + http.getRemoteAddr();
         var janela = Duration.ofMinutes(cadastroJanelaMinutos);
-        limite.verificar(chave, cadastroMax, janela);
-        limite.registrar(chave, janela);
+        limite.consumir(chave, cadastroMax, janela);
         return auth.registrar(req, contexto(http));
     }
 
     @PostMapping("/login")
     public SessaoResponse login(@Valid @RequestBody LoginRequest req, HttpServletRequest http) {
-        var chave = "login:" + http.getRemoteAddr() + ":" + req.email().trim().toLowerCase();
+        var chave = "login:" + http.getRemoteAddr() + ":" + req.email().trim().toLowerCase(Locale.ROOT);
         var janela = Duration.ofMinutes(loginJanelaMinutos);
-        limite.verificar(chave, loginMaxFalhas, janela);
-        try {
-            var sessao = auth.login(req, contexto(http));
-            limite.limpar(chave);
-            return sessao;
-        } catch (ApiException e) {
-            if (e.getStatus() == HttpStatus.UNAUTHORIZED) limite.registrar(chave, janela);
-            throw e;
-        }
+        return limite.executarLogin(chave, loginMaxFalhas, janela, () -> auth.login(req, contexto(http)));
     }
 
     @Operation(summary = "Troca o refresh token por um novo par de tokens (rotação)")
