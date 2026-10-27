@@ -152,6 +152,18 @@ class TarefasIntegracaoTest extends IntegracaoTest {
         assertThat(editada.getBody()).containsEntry("versao", ocorrencia(id).get("versao"));
     }
 
+    @Test
+    void respostaDasAcoesDeStatusTraziaAVersaoPersistida() {
+        var id = criarAvulsa("Versões das ações", null);
+        var base = "/api/v1/tarefas/ocorrencias/" + id + "/";
+
+        for (var acao : new String[] {"iniciar", "pausar", "concluir", "reabrir", "cancelar"}) {
+            var resposta = api.post(base + acao, token, null);
+            assertThat(resposta.getStatusCode()).as(acao).isEqualTo(HttpStatus.OK);
+            assertThat(resposta.getBody()).as(acao).containsEntry("versao", ocorrencia(id).get("versao"));
+        }
+    }
+
     // ---------- apoio ----------
 
     private String criarAvulsa(String titulo, Instant prazo) {

@@ -203,6 +203,7 @@ public class OcorrenciaTarefaService {
         if (o.getIniciadaEm() == null) o.setIniciadaEm(agora);
         if (o.getResponsavelId() == null) o.setResponsavelId(u.id());
         auditoria.registrar(u, "tarefa.iniciar", "ocorrencia", o.getId(), o.getEmpresaId(), o.getTitulo() + " iniciada");
+        ocorrencias.saveAndFlush(o);
         return montar(u, List.of(o), agora).getFirst();
     }
 
@@ -215,6 +216,7 @@ public class OcorrenciaTarefaService {
         o.pararCronometro(agora);
         o.setStatus(StatusOcorrencia.PAUSADA);
         auditoria.registrar(u, "tarefa.pausar", "ocorrencia", o.getId(), o.getEmpresaId(), o.getTitulo() + " pausada");
+        ocorrencias.saveAndFlush(o);
         return montar(u, List.of(o), agora).getFirst();
     }
 
@@ -229,6 +231,7 @@ public class OcorrenciaTarefaService {
         if (agora.isAfter(o.getPrazo())) o.setSlaViolado(true);
         auditoria.registrar(u, "tarefa.concluir", "ocorrencia", o.getId(), o.getEmpresaId(),
                 o.getTitulo() + " concluída" + (o.isSlaViolado() ? " fora do prazo" : ""));
+        ocorrencias.saveAndFlush(o);
         return montar(u, List.of(o), agora).getFirst();
     }
 
@@ -239,6 +242,7 @@ public class OcorrenciaTarefaService {
         o.setConcluidaEm(null);
         o.setConcluidaPorId(null);
         auditoria.registrar(u, "tarefa.reabrir", "ocorrencia", o.getId(), o.getEmpresaId(), o.getTitulo() + " reaberta");
+        ocorrencias.saveAndFlush(o);
         return montar(u, List.of(o), Instant.now()).getFirst();
     }
 
@@ -250,6 +254,7 @@ public class OcorrenciaTarefaService {
         o.setStatus(StatusOcorrencia.CANCELADA);
         auditoria.registrar(u, "tarefa.cancelar", "ocorrencia", o.getId(), o.getEmpresaId(),
                 o.getTitulo() + " cancelada");
+        ocorrencias.saveAndFlush(o);
         return montar(u, List.of(o), agora).getFirst();
     }
 
