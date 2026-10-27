@@ -78,4 +78,21 @@ class RecorrenciasTest {
         assertThat(ocorre(Recorrencia.UNICA, List.of(), null, SABADO, true, DOMINGO)).isFalse();
         assertThat(ocorre(Recorrencia.UNICA, List.of(), null, null, true, DOMINGO)).isFalse();
     }
+
+    @Test
+    void diariaApenasDiasUteisPulaFeriadoNacional() {
+        var finados = LocalDate.of(2026, 11, 2); // segunda-feira
+        assertThat(ocorre(Recorrencia.DIARIA, List.of(), null, null, true, finados)).isFalse();
+        assertThat(ocorre(Recorrencia.DIARIA, List.of(), null, null, false, finados)).isTrue();
+        var sextaSanta = LocalDate.of(2026, 4, 3);
+        assertThat(ocorre(Recorrencia.DIARIA, List.of(), null, null, true, sextaSanta)).isFalse();
+    }
+
+    @Test
+    void mensalEmFeriadoAntecipaParaDiaUtilAnterior() {
+        // 02/11/2027 (Finados) é terça: antecipa para segunda 01/11.
+        assertThat(Recorrencias.dataMensal(2027, 11, 2, true)).isEqualTo(LocalDate.of(2027, 11, 1));
+        // 01/01/2026 (quinta, feriado): antecipar sairia do mês, então adia para sexta 02/01.
+        assertThat(Recorrencias.dataMensal(2026, 1, 1, true)).isEqualTo(LocalDate.of(2026, 1, 2));
+    }
 }
