@@ -110,6 +110,20 @@ Com `JOBS_ENABLED=true`:
 
 Com mais de uma instância da API, deixe `JOBS_ENABLED=true` em apenas uma (ou adote ShedLock).
 
+## Produção (Render + Supabase)
+
+Ative o perfil `prod` com `SPRING_PROFILES_ACTIVE=prod` (arquivo `application-prod.yml`). Ele:
+
+- **fecha a documentação**: `/docs`, `/swagger-ui.html` e `/v3/api-docs` não são servidos;
+- **conecta ao banco com SSL** (`sslmode=require`): `jdbc:postgresql://DB_HOST:POSTGRES_PORT/POSTGRES_DB?sslmode=DB_SSLMODE`;
+- **não carrega o seed**: o perfil `seed` só roda se for pedido explicitamente.
+
+Variáveis a configurar no painel do Render (nunca no Git): `DB_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `ENCRYPTION_KEY`, `CORS_ORIGINS` (URL do front na Vercel) e `SPRING_PROFILES_ACTIVE`. A porta vem de `PORT`, que o Render injeta sozinho.
+
+Supabase: use o **session pooler** (porta `5432`; `POSTGRES_USER` no formato `postgres.<ref-do-projeto>`) com SSL.
+
+**Primeiro deploy com os logins de demonstração** (projeto acadêmico, a banca usa os acessos deste README): suba com `SPRING_PROFILES_ACTIVE=prod,seed`. O seed **apaga e recria o escritório de demonstração a cada inicialização**, então depois do primeiro start volte para `SPRING_PROFILES_ACTIVE=prod`, ou os dados criados na demonstração serão perdidos no próximo deploy.
+
 ### Arquivos no Supabase Storage
 
 O disco do Render é efêmero, então em produção use o bucket do Supabase pelo protocolo S3: `STORAGE_TIPO=s3`,
@@ -140,7 +154,8 @@ Os testes de integração sobem um PostgreSQL 16 temporário via Testcontainers 
 | --- | --- | --- |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` / `POSTGRES_PORT` | `ativeplay` / — / `ativeplay` / `5432` | Banco (compartilhado com o Compose) |
 | `DB_HOST` | `127.0.0.1` | Host do banco (`db` dentro do Compose) |
-| `SERVER_PORT` | `8080` | Porta HTTP |
+| `PORT` / `SERVER_PORT` | `8080` | Porta HTTP; `PORT` (injetada pelo Render) tem prioridade sobre `SERVER_PORT` |
+| `DB_SSLMODE` | `require` | Só no perfil `prod`: modo SSL da conexão (`require` para o Supabase) |
 | `JWT_ACCESS_SECRET` | — | Segredo HS256, mínimo 32 caracteres |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL_DAYS` | `15m` / `30` | Validade dos tokens |
 | `ENCRYPTION_KEY` | — | 32 bytes em base64 para cifrar credenciais de ERP (`openssl rand -base64 32`) |

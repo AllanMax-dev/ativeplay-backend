@@ -21,6 +21,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <lombok.version>1.18.48</lombok.version>
         <springdoc.version>2.8.17</springdoc.version>
+        <shedlock.version>6.3.1</shedlock.version>
         <!-- 2.29.x: ainda não envia checksums adicionais que alguns S3 compatíveis rejeitam -->
         <awssdk.version>2.29.52</awssdk.version>
         <!-- Permite builds paralelos em pastas separadas: mvn compile -DbuildDir=target-x -->
@@ -69,6 +70,16 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>${shedlock.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>${shedlock.version}</version>
         </dependency>
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
