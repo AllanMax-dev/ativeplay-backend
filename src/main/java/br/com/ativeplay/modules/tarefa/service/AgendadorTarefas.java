@@ -6,8 +6,6 @@ import br.com.ativeplay.shared.util.Datas;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,11 +23,6 @@ public class AgendadorTarefas {
     private final AtivePlayProperties props;
     private final EscritorioRepository escritorios;
     private final GeracaoOcorrenciasService geracao;
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void aoIniciar() {
-        gerarDoDia();
-    }
 
     @Scheduled(cron = "0 5 0 * * *", zone = "America/Sao_Paulo")
     @SchedulerLock(name = "gerarOcorrenciasDoDia", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")

@@ -108,7 +108,7 @@ Com `JOBS_ENABLED=true`:
 - **00:05 (horário de Brasília)** e na inicialização: gera as ocorrências do dia a partir das definições ativas (idempotente).
 - **A cada minuto:** marca `sla_violado` nas ocorrências abertas com prazo vencido e notifica os responsáveis.
 
-Com mais de uma instância da API, deixe `JOBS_ENABLED=true` em apenas uma (ou adote ShedLock).
+Com mais de uma instância da API, o ShedLock coordena as rotinas pela tabela `shedlock`, incluindo a geração na inicialização. As instâncias devem compartilhar o mesmo banco; os tempos máximos das travas devem exceder a duração dos jobs.
 
 ## Produção (Render + Supabase)
 
