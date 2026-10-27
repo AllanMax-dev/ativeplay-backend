@@ -5,3 +5,4 @@ storage/
 .env
 .idea/
 *.iml
+.maestri/
