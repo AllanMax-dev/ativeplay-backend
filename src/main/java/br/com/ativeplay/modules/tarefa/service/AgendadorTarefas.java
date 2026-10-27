@@ -5,6 +5,7 @@ import br.com.ativeplay.modules.escritorio.repository.EscritorioRepository;
 import br.com.ativeplay.shared.util.Datas;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Rotinas agendadas da operação (desligáveis com JOBS_ENABLED=false; com várias instâncias
- * da API, deixe ligadas em apenas uma):
+ * da API, o ShedLock garante que só uma execute cada rotina por vez):
  * - 00:05 (Brasília) e na inicialização: gera as ocorrências do dia;
  * - a cada minuto: marca prazos vencidos (SLA).
  */
@@ -31,6 +32,7 @@ public class AgendadorTarefas {
     }
 
     @Scheduled(cron = "0 5 0 * * *", zone = "America/Sao_Paulo")
+    @SchedulerLock(name = "gerarOcorrenciasDoDia", lockAtMostFor = "PT10M", lockAtLeastFor = "PT1M")
     public void gerarDoDia() {
         if (!props.jobsEnabled()) return;
         for (var escritorio : escritorios.findByAtivoTrue()) {
@@ -43,6 +45,7 @@ public class AgendadorTarefas {
     }
 
     @Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
+    @SchedulerLock(name = "varrerSla", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     public void varrerSla() {
         if (!props.jobsEnabled()) return;
         try {
