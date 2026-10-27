@@ -110,6 +110,13 @@ Com `JOBS_ENABLED=true`:
 
 Com mais de uma instância da API, deixe `JOBS_ENABLED=true` em apenas uma (ou adote ShedLock).
 
+### Arquivos no Supabase Storage
+
+O disco do Render é efêmero, então em produção use o bucket do Supabase pelo protocolo S3: `STORAGE_TIPO=s3`,
+`S3_ENDPOINT=https://<ref-do-projeto>.storage.supabase.co/storage/v1/s3`, `S3_REGION` (a região do projeto, ex.: `sa-east-1`),
+`S3_BUCKET` (bucket privado criado no painel) e `S3_ACCESS_KEY` / `S3_SECRET_KEY` (gerados em *Storage > S3 Connection*).
+Essas chaves ficam só no painel do Render, nunca no Git. Em dev e nos testes o padrão continua sendo o disco local.
+
 ## Testes
 
 ```bash
@@ -138,6 +145,9 @@ Os testes de integração sobem um PostgreSQL 16 temporário via Testcontainers 
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL_DAYS` | `15m` / `30` | Validade dos tokens |
 | `ENCRYPTION_KEY` | — | 32 bytes em base64 para cifrar credenciais de ERP (`openssl rand -base64 32`) |
 | `UPLOAD_DIR` | `./storage` | Pasta dos arquivos enviados |
+| `STORAGE_TIPO` | `local` | Onde guardar os arquivos: `local` (disco, `UPLOAD_DIR`) ou `s3` (bucket S3 compatível, ex.: Supabase Storage) |
+| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | — / `us-east-1` / — | Só com `STORAGE_TIPO=s3`: endpoint, região e bucket |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | — | Só com `STORAGE_TIPO=s3`: chaves de acesso S3 do bucket |
 | `UPLOAD_MAX_MB` | `20` | Tamanho máximo por arquivo |
 | `CORS_ORIGINS` | `http://localhost:5173` | Origens do frontend, separadas por vírgula |
 | `JOBS_ENABLED` | `true` | Liga as rotinas agendadas |

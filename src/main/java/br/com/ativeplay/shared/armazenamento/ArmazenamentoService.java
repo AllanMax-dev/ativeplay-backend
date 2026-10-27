@@ -1,77 +1,33 @@
 package br.com.ativeplay.shared.armazenamento;
 
-import br.com.ativeplay.config.AtivePlayProperties;
-import br.com.ativeplay.shared.erro.ApiException;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
-import org.springframework.stereotype.Service;
 
 /**
- * Armazenamento de arquivos em disco local. A interface (salvar/abrir/remover por chave)
- * permite trocar por S3/GCS sem alterar os módulos que a usam.
+ * Armazenamento de arquivos enviados (salvar/abrir/remover por chave). Implementações:
+ * {@link ArmazenamentoLocal} (disco, padrão) e {@link ArmazenamentoS3} (S3 compatível, ex.: Supabase Storage),
+ * escolhidas pela variável STORAGE_TIPO (local | s3).
  */
-@Service
-public class ArmazenamentoService {
+public interface ArmazenamentoService {
 
-    public record ArquivoSalvo(String storageKey, String sha256, long tamanho) {
+    record ArquivoSalvo(String storageKey, String sha256, long tamanho) {
     }
 
-    private final Path raiz;
+    ArquivoSalvo salvar(UUID escritorioId, String nomeOriginal, InputStream conteudo);
 
-    public ArmazenamentoService(AtivePlayProperties props) {
-        this.raiz = Path.of(props.uploadDir()).toAbsolutePath().normalize();
-    }
+    /** Lança 404 se a chave não existir. */
+    Resource abrir(String storageKey);
 
-    public ArquivoSalvo salvar(UUID escritorioId, String nomeOriginal, InputStream conteudo) {
+    void remover(String storageKey);
+
+    /** Chave no formato {escritorio}/{ano}/{mes}/{uuid}{extensão}. */
+    static String novaChave(UUID escritorioId, String nomeOriginal) {
         var hoje = LocalDate.now();
-        var chave = "%s/%d/%02d/%s%s".formatted(escritorioId, hoje.getYear(), hoje.getMonthValue(), UUID.randomUUID(),
+        return "%s/%d/%02d/%s%s".formatted(escritorioId, hoje.getYear(), hoje.getMonthValue(), UUID.randomUUID(),
                 extensao(nomeOriginal));
-        var destino = caminhoSeguro(chave);
-        try {
-            Files.createDirectories(destino.getParent());
-            var digest = MessageDigest.getInstance("SHA-256");
-            long tamanho;
-            try (var entrada = new java.security.DigestInputStream(conteudo, digest)) {
-                tamanho = Files.copy(entrada, destino);
-            }
-            return new ArquivoSalvo(chave, HexFormat.of().formatHex(digest.digest()), tamanho);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Falha ao gravar arquivo", e);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    public Resource abrir(String storageKey) {
-        var caminho = caminhoSeguro(storageKey);
-        if (!Files.exists(caminho)) throw ApiException.naoEncontrado("Arquivo");
-        return new FileSystemResource(caminho);
-    }
-
-    public void remover(String storageKey) {
-        try {
-            Files.deleteIfExists(caminhoSeguro(storageKey));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /** Impede path traversal: a chave precisa resolver para dentro da raiz. */
-    private Path caminhoSeguro(String chave) {
-        var caminho = raiz.resolve(chave).normalize();
-        if (!caminho.startsWith(raiz)) throw ApiException.naoEncontrado("Arquivo");
-        return caminho;
     }
 
     private static String extensao(String nome) {
