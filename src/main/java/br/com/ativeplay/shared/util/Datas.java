@@ -22,9 +22,10 @@ public final class Datas {
         return fuso == null || fuso.isBlank() ? FUSO_PADRAO : ZoneId.of(fuso);
     }
 
+    /** Dia útil: não é fim de semana nem feriado nacional. */
     public static boolean diaUtil(LocalDate data) {
         var dia = data.getDayOfWeek();
-        return dia != DayOfWeek.SATURDAY && dia != DayOfWeek.SUNDAY;
+        return dia != DayOfWeek.SATURDAY && dia != DayOfWeek.SUNDAY && !Feriados.isFeriadoNacional(data);
     }
 
     /** 0 = domingo ... 6 = sábado (mesma convenção do frontend e da coluna dias_semana). */
