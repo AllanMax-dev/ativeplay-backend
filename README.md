@@ -18,9 +18,8 @@ API REST da plataforma Ative Play: gestão operacional multi-tenant para escrit�
 Requisitos: **JDK 21+** e **Docker**. Maven não é necessário (use `./mvnw`, ou `mvnw.cmd` no Windows).
 
 ```bash
-cd backend
 cp .env.example .env                                       # ajuste segredos se quiser
-docker compose up -d db                                    # Postgres em 127.0.0.1:5432
+docker compose up -d db                                    # Postgres em 127.0.0.1:5432 (ou POSTGRES_PORT)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev,seed # cria as tabelas, carrega a demo e sobe a API
 ```
 
@@ -32,7 +31,7 @@ Nas próximas vezes, `./mvnw spring-boot:run` basta (o perfil `seed` recria o es
 
 A aplicação lê o mesmo `.env` usado pelo Docker Compose. Para subir **tudo em containers**: `docker compose --profile api up -d --build`. Cliente SQL web: `docker compose --profile tools up -d adminer` → http://localhost:8081 (servidor `db`).
 
-> No Windows com WSL, um Postgres do WSL pode ocupar `localhost:5432`; por isso a conexão usa `127.0.0.1`. Se a porta estiver ocupada, troque `POSTGRES_PORT` no `.env`.
+> No Windows com WSL, um Postgres do WSL pode ocupar `localhost:5432`; por isso a conexão usa `127.0.0.1`. Se a porta estiver ocupada (ex.: Postgres do Windows ou do WSL), troque `POSTGRES_PORT` no `.env` (ex.: `5433`) antes de subir o `db`; a API lê o mesmo `.env`.
 
 ### Acessos de demonstração
 
@@ -51,7 +50,7 @@ Senha de todos: `Ativeplay@123`
 Organização **por domínio** (package-by-feature), com camadas dentro de cada módulo:
 
 ```text
-backend/
+ativeplay-backend/
 ├── docker-compose.yml           # Postgres (+ API e Adminer por profile)
 ├── Dockerfile                   # build multi-stage (Maven → JRE 21)
 ├── pom.xml  mvnw  mvnw.cmd
@@ -96,7 +95,7 @@ backend/
 
 ### Segurança e multi-tenancy
 
-- Todas as rotas exigem `Authorization: Bearer <token>`, exceto cadastro, login, refresh, logout, `/docs` e `/actuator/health`.
+- Todas as rotas exigem `Authorization: Bearer <token>`, exceto cadastro, login, refresh, logout, `/docs` (também `/swagger-ui.html`) e `/actuator/health`.
 - O token carrega `escritorioId` e `perfil`; **toda consulta é filtrada pelo escritório do token**, nunca por um id vindo do cliente.
 - `@RequerModulo(Modulo.X)` verifica a matriz `permissoes_perfil` (GET exige leitura; demais métodos, escrita). ADMIN tem acesso total.
 - OPERADOR só acessa as empresas da sua carteira (`EscopoService`). CLIENTE só acessa `/api/v1/portal/**`.
