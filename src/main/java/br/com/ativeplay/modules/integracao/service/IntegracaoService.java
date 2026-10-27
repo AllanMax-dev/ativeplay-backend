@@ -163,7 +163,10 @@ public class IntegracaoService {
         auditoria.registrar(u, "integracao.testar", "integracao", i.getId(), i.getEmpresaId(),
                 i.getStatus() == StatusIntegracao.ATIVA ? "Conexão OK" : "Falha: " + i.getUltimoErro());
         return new TesteResponse(i.getStatus() == StatusIntegracao.ATIVA,
-                i.getStatus() == StatusIntegracao.ATIVA ? "Conexão verificada" : i.getUltimoErro(), i.getStatus());
+                i.getStatus() == StatusIntegracao.ATIVA
+                        ? (provedores.de(i.getProvedor()).simulado() ? "Conexão verificada (SIMULADA)" : "Conexão verificada")
+                        : i.getUltimoErro(),
+                i.getStatus());
     }
 
     /**
@@ -215,7 +218,8 @@ public class IntegracaoService {
             i.setUltimoErro(falha);
             if (falha == null) i.setUltimaSincronizacao(agora);
             auditoria.registrar(u, "integracao.sincronizar", "integracao", i.getId(), i.getEmpresaId(),
-                    recurso + ": " + (falha == null ? total + " registro(s)" : "erro — " + falha));
+                    recurso + ": " + (falha == null ? total + " registro(s)"
+                            + (provedores.de(i.getProvedor()).simulado() ? " (SIMULADO)" : "") : "erro — " + falha));
             if (falha != null) {
                 var responsavel = empresas.findById(i.getEmpresaId()).map(Empresa::getResponsavelId).orElse(null);
                 notificacoes.notificar(u.escritorioId(), responsavel, TipoNotificacao.INTEGRACAO,

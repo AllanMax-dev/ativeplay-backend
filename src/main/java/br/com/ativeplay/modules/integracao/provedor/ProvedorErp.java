@@ -9,6 +9,11 @@ public interface ProvedorErp {
 
     ProvedorIntegracao tipo();
 
+    /** Verdadeiro quando o adaptador não fala com o ERP real e apenas simula os dados. */
+    default boolean simulado() {
+        return false;
+    }
+
     /** Valida o formato das credenciais antes de gravá-las (lança ApiException 400). */
     void validarCredenciais(Map<String, String> credenciais);
 
