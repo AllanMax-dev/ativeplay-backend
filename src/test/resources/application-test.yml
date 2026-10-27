@@ -8,3 +8,5 @@ ativeplay:
   encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
   upload-dir: target/storage-test
   jobs-enabled: false
+  limite:
+    cadastro-max: 1000   # os testes cadastram vários escritórios a partir do mesmo IP
