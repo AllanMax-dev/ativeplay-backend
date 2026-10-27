@@ -38,7 +38,7 @@ public class SecurityConfig {
         "/api/v1/auth/login", "/api/v1/auth/registrar", "/api/v1/auth/refresh", "/api/v1/auth/logout"
     };
     private static final String[] ROTAS_PUBLICAS = {
-        "/actuator/health/**", "/docs", "/docs/**", "/swagger-ui/**", "/v3/api-docs/**", "/error"
+        "/actuator/health/**", "/docs", "/docs/**", "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/error"
     };
 
     @Bean
