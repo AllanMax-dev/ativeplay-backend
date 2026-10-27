@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -145,9 +144,6 @@ class TarefasIntegracaoTest extends IntegracaoTest {
                 .isInstanceOf(ObjectOptimisticLockingFailureException.class);
     }
 
-    // BUG (encontrado nesta suíte): a resposta do PATCH traz "versao" antiga. O @Version só é incrementado
-    // no flush do commit, e a resposta é montada antes disso. Ver a versão real em um GET depois do PATCH.
-    @Disabled("bug: PATCH devolve versao antiga (0) enquanto o banco já está na versão 1")
     @Test
     void respostaDoPatchTraziaAVersaoPersistida() {
         var id = criarAvulsa("Versão da resposta", null);

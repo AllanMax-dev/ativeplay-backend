@@ -178,6 +178,7 @@ public class OcorrenciaTarefaService {
             avisarAtribuicao(u, o);
         }
         auditoria.registrar(u, "tarefa.editar", "ocorrencia", o.getId(), o.getEmpresaId(), o.getTitulo() + " editada");
+        ocorrencias.saveAndFlush(o); // @Version só sobe no flush; sem isso a resposta traria a versão antiga
         return montar(u, List.of(o), Instant.now()).getFirst();
     }
 
