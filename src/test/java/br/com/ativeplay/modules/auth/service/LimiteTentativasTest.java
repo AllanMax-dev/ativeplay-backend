@@ -63,6 +63,21 @@ class LimiteTentativasTest {
     }
 
     @Test
+    void limpezaDoLoginPreservaAJanelaMaiorDoCadastro() {
+        var janelaCadastro = Duration.ofHours(1);
+        for (int i = 0; i < 5; i++) limite.registrar("cadastro:ip", janelaCadastro);
+        relogio.agora = relogio.agora.plus(Duration.ofMinutes(20));
+
+        // A milésima operação dispara a limpeza global usando tráfego de login.
+        for (int i = 0; i < 995; i++) limite.registrar("login:" + i, JANELA);
+
+        assertThatThrownBy(() -> limite.verificar("cadastro:ip", 5, janelaCadastro))
+                .isInstanceOf(ApiException.class);
+        relogio.agora = relogio.agora.plus(Duration.ofMinutes(40));
+        assertThatCode(() -> limite.verificar("cadastro:ip", 5, janelaCadastro)).doesNotThrowAnyException();
+    }
+
+    @Test
     void limparZeraAChave() {
         for (int i = 0; i < 3; i++) limite.registrar("a", JANELA);
         limite.limpar("a");

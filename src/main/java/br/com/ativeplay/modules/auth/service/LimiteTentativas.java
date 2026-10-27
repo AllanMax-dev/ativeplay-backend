@@ -38,9 +38,9 @@ public class LimiteTentativas {
         var fila = tentativas.get(chave);
         if (fila == null) return;
         synchronized (fila) {
-            descartarExpiradas(fila, agora, janela);
+            descartarExpiradas(fila, agora);
             if (fila.size() >= maximo) {
-                long minutos = Math.max(1, Duration.between(agora, fila.peekFirst().plus(janela)).toMinutes() + 1);
+                long minutos = Math.max(1, Duration.between(agora, fila.peekFirst()).toMinutes() + 1);
                 throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
                         "Muitas tentativas. Tente novamente em cerca de " + minutos + " minuto(s)");
             }
@@ -52,10 +52,10 @@ public class LimiteTentativas {
         var agora = relogio.instant();
         var fila = tentativas.computeIfAbsent(chave, k -> new ArrayDeque<>());
         synchronized (fila) {
-            descartarExpiradas(fila, agora, janela);
-            fila.addLast(agora);
+            descartarExpiradas(fila, agora);
+            fila.addLast(agora.plus(janela));
         }
-        limparSeNecessario(agora, janela);
+        limparSeNecessario(agora);
     }
 
     /** Zera a chave (ex.: login bem-sucedido). */
@@ -63,15 +63,15 @@ public class LimiteTentativas {
         tentativas.remove(chave);
     }
 
-    private static void descartarExpiradas(Deque<Instant> fila, Instant agora, Duration janela) {
-        while (!fila.isEmpty() && !fila.peekFirst().plus(janela).isAfter(agora)) fila.pollFirst();
+    private static void descartarExpiradas(Deque<Instant> fila, Instant agora) {
+        fila.removeIf(expiracao -> !expiracao.isAfter(agora));
     }
 
-    private synchronized void limparSeNecessario(Instant agora, Duration janela) {
+    private synchronized void limparSeNecessario(Instant agora) {
         if (++operacoes % LIMPEZA_A_CADA != 0) return;
         tentativas.entrySet().removeIf(e -> {
             synchronized (e.getValue()) {
-                descartarExpiradas(e.getValue(), agora, janela);
+                descartarExpiradas(e.getValue(), agora);
                 return e.getValue().isEmpty();
             }
         });
