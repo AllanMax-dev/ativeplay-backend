@@ -1,10 +1,10 @@
 package br.com.ativeplay.shared.armazenamento;
 
 import br.com.ativeplay.shared.erro.ApiException;
+import br.com.ativeplay.config.S3Properties;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
@@ -12,18 +12,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.UUID;
-import org.springframework.beans.factory.DisposableBean;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.AbstractResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -33,22 +27,14 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
  */
 @Service
 @ConditionalOnProperty(name = "STORAGE_TIPO", havingValue = "s3")
-public class ArmazenamentoS3 implements ArmazenamentoService, DisposableBean {
+public class ArmazenamentoS3 implements ArmazenamentoService {
 
     private final S3Client s3;
     private final String bucket;
 
-    public ArmazenamentoS3(@Value("${S3_ENDPOINT}") String endpoint, @Value("${S3_REGION:us-east-1}") String regiao,
-            @Value("${S3_BUCKET}") String bucket, @Value("${S3_ACCESS_KEY}") String accessKey,
-            @Value("${S3_SECRET_KEY}") String secretKey) {
-        this.bucket = bucket;
-        this.s3 = S3Client.builder()
-                .endpointOverride(URI.create(endpoint))
-                .region(Region.of(regiao))
-                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
-                // Supabase e outros S3 compatíveis usam o bucket no caminho, não no host
-                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
-                .build();
+    public ArmazenamentoS3(S3Client s3, S3Properties props) {
+        this.bucket = props.getBucket();
+        this.s3 = s3;
     }
 
     @Override
@@ -91,11 +77,6 @@ public class ArmazenamentoS3 implements ArmazenamentoService, DisposableBean {
     @Override
     public void remover(String storageKey) {
         s3.deleteObject(r -> r.bucket(bucket).key(storageKey));
-    }
-
-    @Override
-    public void destroy() {
-        s3.close();
     }
 
     /** Resource que busca o objeto no bucket somente quando o conteúdo é lido. */

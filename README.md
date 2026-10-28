@@ -31,6 +31,8 @@ Nas próximas vezes, `./mvnw spring-boot:run` basta (o perfil `seed` recria o es
 
 A aplicação lê o mesmo `.env` usado pelo Docker Compose. Para subir **tudo em containers**: `docker compose --profile api up -d --build`. Cliente SQL web: `docker compose --profile tools up -d adminer` → http://localhost:8081 (servidor `db`).
 
+No Compose, `POSTGRES_PORT` e `SERVER_PORT` do `.env` definem as portas publicadas no computador. Entre containers, a API sempre usa `db:5432` e escuta em `8080`, mesmo que o `.env` contenha `PORT` para um deploy no Render.
+
 > No Windows com WSL, um Postgres do WSL pode ocupar `localhost:5432`; por isso a conexão usa `127.0.0.1`. Se a porta estiver ocupada (ex.: Postgres do Windows ou do WSL), troque `POSTGRES_PORT` no `.env` (ex.: `5433`) antes de subir o `db`; a API lê o mesmo `.env`.
 
 ### Acessos de demonstração
@@ -108,7 +110,7 @@ Com `JOBS_ENABLED=true`:
 - **00:05 (horário de Brasília)** e na inicialização: gera as ocorrências do dia a partir das definições ativas (idempotente).
 - **A cada minuto:** marca `sla_violado` nas ocorrências abertas com prazo vencido e notifica os responsáveis.
 
-Com mais de uma instância da API, deixe `JOBS_ENABLED=true` em apenas uma (ou adote ShedLock).
+Com mais de uma instância da API, o ShedLock coordena as rotinas pela tabela `shedlock`, incluindo a geração na inicialização. As instâncias devem compartilhar o mesmo banco; os tempos máximos das travas devem exceder a duração dos jobs.
 
 ## Produção (Render + Supabase)
 

@@ -4,11 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.ativeplay.shared.erro.ApiException;
+import br.com.ativeplay.config.S3Config;
+import br.com.ativeplay.config.S3Properties;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -18,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.s3.S3Client;
 
 /** Exercita o cliente S3 contra um servidor S3 mínimo em memória (PUT/GET/HEAD/DELETE em modo path-style). */
 class ArmazenamentoS3Test {
@@ -25,19 +29,26 @@ class ArmazenamentoS3Test {
     private final Map<String, byte[]> objetos = new ConcurrentHashMap<>();
     private HttpServer servidor;
     private ArmazenamentoS3 armazenamento;
+    private S3Client cliente;
 
     @BeforeEach
     void subirS3Falso() throws IOException {
         servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         servidor.createContext("/", this::atender);
         servidor.start();
-        armazenamento = new ArmazenamentoS3("http://127.0.0.1:" + servidor.getAddress().getPort(), "sa-east-1",
-                "documentos", "chave-de-teste", "segredo-de-teste");
+        var props = new S3Properties();
+        props.setEndpoint(URI.create("http://127.0.0.1:" + servidor.getAddress().getPort()));
+        props.setRegion("sa-east-1");
+        props.setBucket("documentos");
+        props.setAccessKey("chave-de-teste");
+        props.setSecretKey("segredo-de-teste");
+        cliente = new S3Config().s3Client(props);
+        armazenamento = new ArmazenamentoS3(cliente, props);
     }
 
     @AfterEach
     void desligar() {
-        armazenamento.destroy();
+        if (cliente != null) cliente.close();
         servidor.stop(0);
     }
 

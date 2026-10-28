@@ -60,6 +60,13 @@ ativeplay:
   encryption-key: ${ENCRYPTION_KEY}
   upload-dir: ${UPLOAD_DIR:./storage}
   jobs-enabled: ${JOBS_ENABLED:true}
+  storage:
+    s3:
+      endpoint: ${S3_ENDPOINT:}
+      region: ${S3_REGION:us-east-1}
+      bucket: ${S3_BUCKET:}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
 
 springdoc:
   api-docs:
