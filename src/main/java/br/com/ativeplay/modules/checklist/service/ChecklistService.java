@@ -120,6 +120,9 @@ public class ChecklistService {
 
     public ChecklistItemResponse atualizar(UsuarioAutenticado u, UUID empresaId, UUID id, ChecklistItemRequest req) {
         var item = buscar(u, empresaId, id);
+        if (item.isConcluido() && req.subitens() != null && req.subitens().stream().anyMatch(s -> !s.concluido())) {
+            throw ApiException.conflito("Reabra o item antes de alterar os sub-itens");
+        }
         escopo.garantirUsuarioDaEquipe(u, req.responsavelId());
         var responsavelAnterior = item.getResponsavelId();
         aplicar(item, req);

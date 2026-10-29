@@ -179,6 +179,23 @@ class ChecklistModeloIntegracaoTest extends IntegracaoTest {
         assertThat(marcar.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(marcar.getBody()).containsEntry("detail", "Reabra o item antes de alterar os sub-itens");
 
+        // PUT em item concluído: sub-item aberto = 409; só título/prazo com sub-itens concluídos é permitido
+        var abrindo = api.put(checklist(empresa) + "/" + id, admin, Map.of("titulo", "Extratos",
+                "subitens", List.of(Map.of("id", sub1, "texto", "Itaú", "concluido", false),
+                        Map.of("id", sub2, "texto", "Santander", "concluido", true))));
+        assertThat(abrindo.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(abrindo.getBody()).containsEntry("detail", "Reabra o item antes de alterar os sub-itens");
+        var novoAberto = api.put(checklist(empresa) + "/" + id, admin, Map.of("titulo", "Extratos",
+                "subitens", List.of(Map.of("id", sub1, "texto", "Itaú", "concluido", true),
+                        Map.of("texto", "Novo", "concluido", false))));
+        assertThat(novoAberto.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        var editado = api.put(checklist(empresa) + "/" + id, admin, Map.of("titulo", "Extratos de setembro",
+                "prazo", "2031-01-10",
+                "subitens", List.of(Map.of("id", sub1, "texto", "Itaú", "concluido", true),
+                        Map.of("id", sub2, "texto", "Santander", "concluido", true))));
+        assertThat(editado.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(editado.getBody()).containsEntry("titulo", "Extratos de setembro").containsEntry("concluido", true);
+
         api.post(checklist(empresa) + "/" + id + "/reabrir", admin, null);
         assertThat(api.patch(checklist(empresa) + "/" + id + "/subitens/" + sub1, admin, Map.of("concluido", false))
                 .getStatusCode()).isEqualTo(HttpStatus.OK);
