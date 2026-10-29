@@ -3,8 +3,11 @@ package br.com.ativeplay.seed;
 import br.com.ativeplay.config.AtivePlayProperties;
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.checklist.domain.ChecklistItem;
+import br.com.ativeplay.modules.checklist.domain.ChecklistModeloItem;
+import br.com.ativeplay.modules.checklist.domain.ChecklistModeloSubitem;
 import br.com.ativeplay.modules.checklist.domain.ChecklistSubitem;
 import br.com.ativeplay.modules.checklist.repository.ChecklistItemRepository;
+import br.com.ativeplay.modules.checklist.repository.ChecklistModeloItemRepository;
 import br.com.ativeplay.modules.crm.domain.AtividadeCrm;
 import br.com.ativeplay.modules.crm.domain.OportunidadeCrm;
 import br.com.ativeplay.modules.crm.domain.TipoAtividadeCrm;
@@ -108,6 +111,7 @@ public class DemoSeeder implements ApplicationRunner {
     private final AuditoriaService auditoria;
     private final PasswordEncoder passwordEncoder;
     private final ChecklistItemRepository checklist;
+    private final ChecklistModeloItemRepository checklistModelo;
     private final SenhaEmpresaRepository senhasEmpresa;
     private final AtivePlayProperties props;
 
@@ -291,6 +295,11 @@ public class DemoSeeder implements ApplicationRunner {
                 "Avisar o cliente para renovar o e-CNPJ A1.", hoje.plusDays(15), Prioridade.MEDIA, op2, gestor,
                 List.of("Avisar cliente", "Receber novo arquivo .pfx", "Atualizar na aba de senhas")));
 
+        // ---------- checklist modelo (empresas novas nascem com uma cópia) ----------
+        itemModelo(esc, 0, "Certificado digital válido", 7, List.of("Conferir validade", "Solicitar renovação se necessário"));
+        itemModelo(esc, 1, "Acessos bancários recebidos", 5, List.of("Extrato Itaú", "Extrato Santander"));
+        itemModelo(esc, 2, "Contrato assinado", null, List.of());
+
         // ---------- senhas salvas (fictícias) ----------
         String[][] acessos = {
             {"Banco Itaú", "BANCO", "Ag 1234 / CC 56789-0", "Demo@Itau2026", "https://www.itau.com.br"},
@@ -446,6 +455,22 @@ public class DemoSeeder implements ApplicationRunner {
         o.setConcluidaEm(concluidaEm);
         o.setConcluidaPorId(def.getResponsavelId());
         o.setSlaViolado(atrasou);
+    }
+
+    private void itemModelo(java.util.UUID esc, int ordem, String titulo, Integer prazoDias, List<String> passos) {
+        var item = new ChecklistModeloItem();
+        item.setEscritorioId(esc);
+        item.setOrdem(ordem);
+        item.setTitulo(titulo);
+        item.setPrazoDias(prazoDias);
+        for (int i = 0; i < passos.size(); i++) {
+            var sub = new ChecklistModeloSubitem();
+            sub.setItem(item);
+            sub.setTexto(passos.get(i));
+            sub.setOrdem(i);
+            item.getSubitens().add(sub);
+        }
+        checklistModelo.save(item);
     }
 
     private static ChecklistItem itemChecklist(java.util.UUID esc, java.util.UUID empresaId, int ordem, String titulo,

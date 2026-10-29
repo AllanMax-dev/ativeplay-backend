@@ -1,6 +1,7 @@
 package br.com.ativeplay.modules.crm.service;
 
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
+import br.com.ativeplay.modules.checklist.service.ChecklistService;
 import br.com.ativeplay.modules.crm.domain.AtividadeCrm;
 import br.com.ativeplay.modules.crm.domain.EtapaCrm;
 import br.com.ativeplay.modules.crm.domain.OportunidadeCrm;
@@ -61,6 +62,7 @@ public class OportunidadeCrmService {
     private final EscopoService escopo;
     private final AuditoriaService auditoria;
     private final NotificacaoService notificacoes;
+    private final ChecklistService checklist;
 
     // ---------- consultas ----------
 
@@ -189,6 +191,7 @@ public class OportunidadeCrmService {
         empresa.setHonorarioMensal(o.getValorMensal());
         empresa.setResponsavelId(o.getResponsavelId());
         empresas.save(empresa);
+        checklist.copiarModelo(u, empresa.getId());
 
         o.setEmpresaId(empresa.getId());
         mover(u, o, ganha, null, null);

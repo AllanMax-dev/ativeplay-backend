@@ -88,7 +88,7 @@ ativeplay-backend/
 | `empresa` | Clientes do escritório (CNPJ alfanumérico) e equipe responsável |
 | `tarefa` | Padrões → definições recorrentes → ocorrências diárias; cronômetro, SLA, comentários, agendador |
 | `sessao` | Sessões de trabalho por empresa: contador geral do dia (`/sessoes/resumo`) e horas × honorário (`/sessoes/rentabilidade`) |
-| `checklist` | Checklist dentro de cada cliente (observações pontuais com prazo, responsável e sub-itens) |
+| `checklist` | Checklist dentro de cada cliente (observações pontuais com prazo, responsável e sub-itens) e checklist modelo do escritório, copiado para toda empresa nova |
 | `senha` | Senhas salvas de cada cliente, cifradas com AES-256-GCM e com visualização auditada (módulo `SENHAS`) |
 | `documento` | Upload/download de documentos e anexos de tarefas |
 | `crm` | Funil (etapas), oportunidades, atividades e conversão em empresa |

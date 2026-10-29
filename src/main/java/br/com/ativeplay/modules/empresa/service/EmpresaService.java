@@ -1,6 +1,7 @@
 package br.com.ativeplay.modules.empresa.service;
 
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
+import br.com.ativeplay.modules.checklist.service.ChecklistService;
 import br.com.ativeplay.modules.documento.repository.DocumentoRepository;
 import br.com.ativeplay.modules.empresa.domain.Empresa;
 import br.com.ativeplay.modules.empresa.domain.RegimeTributario;
@@ -64,6 +65,7 @@ public class EmpresaService {
     private final EscopoService escopo;
     private final AuditoriaService auditoria;
     private final EntityManager em;
+    private final ChecklistService checklist;
 
     @Transactional(readOnly = true)
     public Pagina<EmpresaResumoResposta> listar(UsuarioAutenticado u, StatusEmpresa status,
@@ -120,6 +122,7 @@ public class EmpresaService {
         e.setEscritorioId(u.escritorioId());
         aplicar(u, e, req, cnpj);
         empresas.save(e);
+        checklist.copiarModelo(u, e.getId());
         auditoria.registrar(u, "empresa.criar", "empresa", e.getId(), e.getId(),
                 "Empresa " + e.getRazaoSocial() + " cadastrada");
         return detalhe(e);
