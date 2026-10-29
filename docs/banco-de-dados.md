@@ -151,6 +151,7 @@ erDiagram
 - **`empresas`** — clientes do escritório. O CNPJ é guardado normalizado (14 caracteres) e aceita o formato alfanumérico que a Receita adota em 2026; é único por escritório.
 - **`checklist_itens`** (V3) — checklist dentro do cliente: observações pontuais com prazo, prioridade e responsável opcionais (ex.: "Cliente pendente de envio do acesso bancário"). `concluido` e `concluido_em` andam juntos (restrição `ck_checklist_conclusao`).
 - **`checklist_subitens`** (V3) — passos de um item do checklist, apagados em cascata com o item.
+- **`checklist_modelo_itens`** e **`checklist_modelo_subitens`** (V4) — checklist modelo do escritório (`escritorio_id` no item; sub-itens apagados em cascata). `prazo_dias` (0 a 365, opcional) vira o prazo da cópia: data de criação da empresa + dias. O modelo não tem responsável. Toda empresa nova (cadastro ou conversão do CRM) recebe uma cópia dos itens em `checklist_itens`/`checklist_subitens`, sem vínculo com o modelo: alterar o modelo depois não muda as cópias nem as empresas existentes.
 - **`senhas_empresa`** (V3) — acessos do cliente que o escritório usa na gestão financeira (bancos, certificado digital, portais, prefeitura, ERP). A senha fica em `senha_cifrada` (AES-256-GCM com `ENCRYPTION_KEY`), nunca sai em listagens e cada visualização é auditada (`senha.revelar`). Protegida pelo módulo `SENHAS` da matriz de permissões.
 
 ### Operação (tarefas)

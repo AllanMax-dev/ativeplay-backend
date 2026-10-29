@@ -106,7 +106,7 @@ class AreaDoClienteIntegracaoTest extends IntegracaoTest {
         var editado = api.put("/api/v1/empresas/" + empresaA + "/checklist/" + id, token, Map.of(
                 "titulo", "Pendente de acesso bancário",
                 "subitens", List.of(Map.of("id", subitens.getFirst().get("id"), "texto", "Token Santander",
-                        "concluido", true), Map.of("texto", "Token Itaú", "concluido", false))));
+                        "concluido", true), Map.of("texto", "Token Itaú", "concluido", true))));
         assertThat((List<Map<String, Object>>) editado.getBody().get("subitens"))
                 .extracting(m -> m.get("texto")).containsExactly("Token Santander", "Token Itaú");
 

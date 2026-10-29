@@ -4,6 +4,7 @@ import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.checklist.domain.ChecklistItem;
 import br.com.ativeplay.modules.checklist.domain.ChecklistSubitem;
 import br.com.ativeplay.modules.checklist.repository.ChecklistItemRepository;
+import br.com.ativeplay.modules.checklist.repository.ChecklistModeloItemRepository;
 import br.com.ativeplay.modules.checklist.web.dto.ChecklistDtos.ChecklistItemRequest;
 import br.com.ativeplay.modules.checklist.web.dto.ChecklistDtos.ChecklistItemResponse;
 import br.com.ativeplay.modules.checklist.web.dto.ChecklistDtos.Situacao;
@@ -51,6 +52,7 @@ public class ChecklistService {
             .thenComparingInt(ChecklistItem::getOrdem);
 
     private final ChecklistItemRepository itens;
+    private final ChecklistModeloItemRepository modelo;
     private final UsuarioRepository usuarios;
     private final EscritorioRepository escritorios;
     private final EscopoService escopo;
@@ -86,6 +88,36 @@ public class ChecklistService {
         return montar(u, List.of(item)).getFirst();
     }
 
+    /**
+     * Copia o checklist modelo do escritório para uma empresa recém-criada, na mesma transação:
+     * sem responsável e sem aviso; prazo = hoje (fuso do escritório) + dias do modelo.
+     */
+    public void copiarModelo(UsuarioAutenticado u, UUID empresaId) {
+        var base = modelo.findByEscritorioIdOrderByOrdem(u.escritorioId()).stream().distinct().toList();
+        if (base.isEmpty()) return;
+        LocalDate hoje = Datas.hoje(escritorios.findById(u.escritorioId()).map(e -> e.getFusoHorario()).orElse(null));
+        var ordem = 0;
+        for (var m : base) {
+            var item = new ChecklistItem();
+            item.setEscritorioId(u.escritorioId());
+            item.setEmpresaId(empresaId);
+            item.setCriadoPorId(u.id());
+            item.setOrdem(ordem++);
+            item.setTitulo(m.getTitulo());
+            item.setObservacoes(m.getObservacoes());
+            item.setPrioridade(m.getPrioridade());
+            item.setPrazo(m.getPrazoDias() == null ? null : hoje.plusDays(m.getPrazoDias()));
+            for (var ms : m.getSubitens()) {
+                var s = new ChecklistSubitem();
+                s.setItem(item);
+                s.setTexto(ms.getTexto());
+                s.setOrdem(ms.getOrdem());
+                item.getSubitens().add(s);
+            }
+            itens.save(item);
+        }
+    }
+
     public ChecklistItemResponse atualizar(UsuarioAutenticado u, UUID empresaId, UUID id, ChecklistItemRequest req) {
         var item = buscar(u, empresaId, id);
         escopo.garantirUsuarioDaEquipe(u, req.responsavelId());
@@ -101,6 +133,9 @@ public class ChecklistService {
     public ChecklistItemResponse concluir(UsuarioAutenticado u, UUID empresaId, UUID id) {
         var item = buscar(u, empresaId, id);
         if (item.isConcluido()) throw ApiException.conflito("O item já está concluído");
+        if (item.getSubitens().stream().anyMatch(s -> !s.isConcluido())) {
+            throw ApiException.conflito("Conclua todos os sub-itens antes de concluir o item");
+        }
         item.concluir(u.id(), Instant.now());
         auditoria.registrar(u, "checklist.concluir", "checklist", item.getId(), empresaId,
                 "Item de checklist " + item.getTitulo() + " concluído");
@@ -121,6 +156,7 @@ public class ChecklistService {
     public ChecklistItemResponse marcarSubitem(UsuarioAutenticado u, UUID empresaId, UUID id, UUID subitemId,
             boolean concluido) {
         var item = buscar(u, empresaId, id);
+        if (item.isConcluido()) throw ApiException.conflito("Reabra o item antes de alterar os sub-itens");
         var sub = item.getSubitens().stream().filter(s -> s.getId().equals(subitemId)).findFirst()
                 .orElseThrow(() -> ApiException.naoEncontrado("Sub-item"));
         sub.setConcluido(concluido);
