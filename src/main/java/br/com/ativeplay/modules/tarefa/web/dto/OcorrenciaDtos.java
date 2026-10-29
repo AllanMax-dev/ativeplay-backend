@@ -53,6 +53,17 @@ public final class OcorrenciaDtos {
     public record EmpresaRef(UUID id, String razaoSocial, String nomeFantasia) {
     }
 
+    /**
+     * Empresa no filtro de "Tarefas do dia", com as contagens da data.
+     *
+     * @param naCarteira a empresa está na carteira do usuário logado
+     * @param checklistPendentes itens do checklist do cliente ainda não concluídos
+     */
+    public record EmpresaDoDiaResponse(UUID id, String razaoSocial, String nomeFantasia, String status,
+            boolean naCarteira, long total, long abertas, long emAndamento, long concluidas, long atrasadas,
+            long checklistPendentes) {
+    }
+
     public record SetorRef(UUID id, String nome, String cor) {
     }
 

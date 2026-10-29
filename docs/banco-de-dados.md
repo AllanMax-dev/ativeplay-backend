@@ -149,6 +149,9 @@ erDiagram
 
 ### Clientes
 - **`empresas`** — clientes do escritório. O CNPJ é guardado normalizado (14 caracteres) e aceita o formato alfanumérico que a Receita adota em 2026; é único por escritório.
+- **`checklist_itens`** (V3) — checklist dentro do cliente: observações pontuais com prazo, prioridade e responsável opcionais (ex.: "Cliente pendente de envio do acesso bancário"). `concluido` e `concluido_em` andam juntos (restrição `ck_checklist_conclusao`).
+- **`checklist_subitens`** (V3) — passos de um item do checklist, apagados em cascata com o item.
+- **`senhas_empresa`** (V3) — acessos do cliente que o escritório usa na gestão financeira (bancos, certificado digital, portais, prefeitura, ERP). A senha fica em `senha_cifrada` (AES-256-GCM com `ENCRYPTION_KEY`), nunca sai em listagens e cada visualização é auditada (`senha.revelar`). Protegida pelo módulo `SENHAS` da matriz de permissões.
 
 ### Operação (tarefas)
 O fluxo tem três níveis:
@@ -163,7 +166,7 @@ Regras da ocorrência:
 - **`tempo_estimado_min`:** meta de execução, usada nos relatórios de produtividade.
 - **`visivel_cliente`:** controla o que aparece no portal do cliente.
 
-Tabelas de apoio: **`comentarios_ocorrencia`**, **`documentos`** (documentos da empresa; com `ocorrencia_id` viram anexos de uma tarefa; o arquivo fica no armazenamento e a tabela guarda `storage_key` e `sha256`) e **`sessoes_trabalho`** (tempo em que o usuário esteve "dentro" de uma empresa).
+Tabelas de apoio: **`comentarios_ocorrencia`**, **`documentos`** (documentos da empresa; com `ocorrencia_id` viram anexos de uma tarefa; o arquivo fica no armazenamento e a tabela guarda `storage_key` e `sha256`) e **`sessoes_trabalho`** (tempo em que o usuário esteve "dentro" de uma empresa). As sessões alimentam o **contador geral** de Tarefas do dia: entrar em uma empresa abre uma sessão; trocar de empresa ou finalizar encerra a anterior (índice único parcial `uq_sessoes_aberta_usuario`). `GET /sessoes/resumo` soma o dia e `GET /sessoes/rentabilidade` compara horas × honorário por cliente.
 
 ### CRM
 - **`etapas_crm`** — colunas do funil; `tipo` (`ABERTA`, `GANHA`, `PERDIDA`) dá significado às etapas sem depender do nome.

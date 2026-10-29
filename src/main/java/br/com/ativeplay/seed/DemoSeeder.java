@@ -1,6 +1,10 @@
 package br.com.ativeplay.seed;
 
+import br.com.ativeplay.config.AtivePlayProperties;
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
+import br.com.ativeplay.modules.checklist.domain.ChecklistItem;
+import br.com.ativeplay.modules.checklist.domain.ChecklistSubitem;
+import br.com.ativeplay.modules.checklist.repository.ChecklistItemRepository;
 import br.com.ativeplay.modules.crm.domain.AtividadeCrm;
 import br.com.ativeplay.modules.crm.domain.OportunidadeCrm;
 import br.com.ativeplay.modules.crm.domain.TipoAtividadeCrm;
@@ -21,6 +25,9 @@ import br.com.ativeplay.modules.integracao.domain.ProvedorIntegracao;
 import br.com.ativeplay.modules.integracao.repository.IntegracaoRepository;
 import br.com.ativeplay.modules.notificacao.domain.TipoNotificacao;
 import br.com.ativeplay.modules.notificacao.service.NotificacaoService;
+import br.com.ativeplay.modules.senha.domain.CategoriaSenha;
+import br.com.ativeplay.modules.senha.domain.SenhaEmpresa;
+import br.com.ativeplay.modules.senha.repository.SenhaEmpresaRepository;
 import br.com.ativeplay.modules.sessao.domain.SessaoTrabalho;
 import br.com.ativeplay.modules.sessao.repository.SessaoTrabalhoRepository;
 import br.com.ativeplay.modules.setor.domain.Setor;
@@ -45,6 +52,7 @@ import br.com.ativeplay.modules.usuario.repository.UsuarioRepository;
 import br.com.ativeplay.modules.usuario.repository.UsuarioSetorRepository;
 import br.com.ativeplay.shared.seguranca.Perfil;
 import br.com.ativeplay.shared.util.Cnpj;
+import br.com.ativeplay.shared.util.Cripto;
 import br.com.ativeplay.shared.util.Datas;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -99,6 +107,9 @@ public class DemoSeeder implements ApplicationRunner {
     private final NotificacaoService notificacoes;
     private final AuditoriaService auditoria;
     private final PasswordEncoder passwordEncoder;
+    private final ChecklistItemRepository checklist;
+    private final SenhaEmpresaRepository senhasEmpresa;
+    private final AtivePlayProperties props;
 
     /** Gerador com semente fixa: o seed é reproduzível. */
     private final Random random = new Random(20261017);
@@ -246,6 +257,61 @@ public class DemoSeeder implements ApplicationRunner {
         sessao.setInicio(agora.minus(Duration.ofMinutes(55)));
         sessoes.save(sessao);
 
+        // histórico do contador geral (sessões encerradas) para o comparativo tempo x honorário
+        for (int dia = 1; dia <= 20; dia++) {
+            var data = hoje.minusDays(dia);
+            if (!Datas.diaUtil(data)) continue;
+            for (int i = 0; i < listaEmpresas.size() - 1; i++) {
+                var operador = equipe.get(i % 2);
+                var inicio = Datas.instanteLocal(data, String.format("%02d:%02d", 8 + i, (dia * 7) % 50), FUSO);
+                var historico = new SessaoTrabalho();
+                historico.setEscritorioId(esc);
+                historico.setUsuarioId(operador.getId());
+                historico.setEmpresaId(listaEmpresas.get(i).getId());
+                historico.setInicio(inicio);
+                historico.setFim(inicio.plus(Duration.ofMinutes(25L + ((long) (i + 1) * dia * 13) % 70)));
+                sessoes.save(historico);
+            }
+        }
+
+        // ---------- checklist do cliente ----------
+        var paoDourado = listaEmpresas.get(0).getId();
+        var sorriso = listaEmpresas.get(1).getId();
+        checklist.save(itemChecklist(esc, paoDourado, 0, "Pendente de envio do acesso bancário",
+                "Cliente ficou de enviar o token do Santander. Sem ele não conseguimos fazer a conciliação.",
+                hoje.plusDays(2), Prioridade.ALTA, op1, gestor, List.of("Token Santander", "Senha internet banking")));
+        checklist.save(itemChecklist(esc, paoDourado, 1, "Faltam notas fiscais de entrada de setembro",
+                "Fornecedores: Moinho Sul e Laticínios Serra.", hoje.minusDays(1), Prioridade.URGENTE, op1, op1,
+                List.of()));
+        var concluido = itemChecklist(esc, paoDourado, 2, "Atualizar contato do financeiro do cliente",
+                "Novo responsável: Carla (financeiro@paodourado.com.br).", null, Prioridade.BAIXA, op1, op1, List.of());
+        concluido.concluir(op1.getId(), agora.minus(Duration.ofDays(1)));
+        checklist.save(concluido);
+        checklist.save(itemChecklist(esc, sorriso, 0, "Certificado digital vence em 15 dias",
+                "Avisar o cliente para renovar o e-CNPJ A1.", hoje.plusDays(15), Prioridade.MEDIA, op2, gestor,
+                List.of("Avisar cliente", "Receber novo arquivo .pfx", "Atualizar na aba de senhas")));
+
+        // ---------- senhas salvas (fictícias) ----------
+        String[][] acessos = {
+            {"Banco Itaú", "BANCO", "Ag 1234 / CC 56789-0", "Demo@Itau2026", "https://www.itau.com.br"},
+            {"Santander Empresas", "BANCO", "12.345.678/0001-90", "Demo#Sant321", "https://www.santander.com.br"},
+            {"Certificado digital A1", "CERTIFICADO", "e-CNPJ Pão Dourado", "Cert@2026", null},
+            {"Portal da energia", "PORTAL", "financeiro@paodourado.com.br", "Luz@2026", null},
+            {"Prefeitura (NFS-e)", "GOVERNO", "123456", "Nfse@2026", null}};
+        for (var a : acessos) {
+            var senha = new SenhaEmpresa();
+            senha.setEscritorioId(esc);
+            senha.setEmpresaId(paoDourado);
+            senha.setAcesso(a[0]);
+            senha.setCategoria(CategoriaSenha.valueOf(a[1]));
+            senha.setUsuario(a[2]);
+            senha.setSenhaCifrada(Cripto.cifrar(a[3], props.encryptionKey()));
+            senha.setUrl(a[4]);
+            senha.setCriadoPorId(op1.getId());
+            senha.setAtualizadoPorId(op1.getId());
+            senhasEmpresa.save(senha);
+        }
+
         // ---------- CRM ----------
         var etapasPorNome = etapas.findAll().stream().filter(e -> e.getEscritorioId().equals(esc))
                 .collect(java.util.stream.Collectors.toMap(e -> e.getNome(), e -> e));
@@ -380,6 +446,30 @@ public class DemoSeeder implements ApplicationRunner {
         o.setConcluidaEm(concluidaEm);
         o.setConcluidaPorId(def.getResponsavelId());
         o.setSlaViolado(atrasou);
+    }
+
+    private static ChecklistItem itemChecklist(java.util.UUID esc, java.util.UUID empresaId, int ordem, String titulo,
+            String observacoes, LocalDate prazo, Prioridade prioridade, Usuario responsavel, Usuario autor,
+            List<String> passos) {
+        var item = new ChecklistItem();
+        item.setEscritorioId(esc);
+        item.setEmpresaId(empresaId);
+        item.setOrdem(ordem);
+        item.setTitulo(titulo);
+        item.setObservacoes(observacoes);
+        item.setPrazo(prazo);
+        item.setPrioridade(prioridade);
+        item.setResponsavelId(responsavel.getId());
+        item.setCriadoPorId(autor.getId());
+        for (int i = 0; i < passos.size(); i++) {
+            var sub = new ChecklistSubitem();
+            sub.setItem(item);
+            sub.setTexto(passos.get(i));
+            sub.setConcluido(i == 0 && passos.size() > 1);
+            sub.setOrdem(i);
+            item.getSubitens().add(sub);
+        }
+        return item;
     }
 
     private static ComentarioOcorrencia comentario(java.util.UUID esc, OcorrenciaTarefa o, Usuario autor, String texto) {

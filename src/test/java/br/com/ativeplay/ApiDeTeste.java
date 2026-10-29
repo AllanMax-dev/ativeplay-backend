@@ -87,6 +87,14 @@ public final class ApiDeTeste {
         return chamar(HttpMethod.PATCH, url, token, corpo, MAPA);
     }
 
+    public ResponseEntity<Map<String, Object>> put(String url, String token, Object corpo) {
+        return chamar(HttpMethod.PUT, url, token, corpo, MAPA);
+    }
+
+    public ResponseEntity<Void> delete(String url, String token) {
+        return http.exchange(url, HttpMethod.DELETE, new HttpEntity<>(headers(token)), Void.class);
+    }
+
     /** Sucesso devolve a lista de documentos; erro devolve o ProblemDetail, por isso o corpo é Object. */
     public ResponseEntity<Object> enviarArquivos(String token, MultiValueMap<String, Object> partes) {
         var h = headers(token);
