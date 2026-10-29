@@ -19,4 +19,6 @@ public interface EmpresaRepository extends JpaRepository<Empresa, UUID>, JpaSpec
     List<Empresa> findByIdInAndEscritorioId(Collection<UUID> ids, UUID escritorioId);
 
     long countByEscritorioId(UUID escritorioId);
+
+    List<Empresa> findByEscritorioId(UUID escritorioId);
 }

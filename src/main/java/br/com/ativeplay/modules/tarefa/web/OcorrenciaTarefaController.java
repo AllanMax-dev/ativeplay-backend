@@ -6,6 +6,7 @@ import br.com.ativeplay.modules.tarefa.service.OcorrenciaTarefaService;
 import br.com.ativeplay.modules.tarefa.service.OcorrenciaTarefaService.Filtro;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.ComentarioRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.ComentarioResponse;
+import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.EmpresaDoDiaResponse;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.GerarRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaAvulsaRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaDetalheResponse;
@@ -67,9 +68,19 @@ public class OcorrenciaTarefaController {
             @RequestParam(required = false) UUID setorId,
             @RequestParam(defaultValue = "false") boolean atrasadas,
             @RequestParam(defaultValue = "false") boolean minhas,
+            @RequestParam(defaultValue = "false") boolean carteira,
             Pageable pageable) {
-        var filtro = new Filtro(empresaId, data, de, ate, status, responsavelId, setorId, atrasadas, minhas);
+        var filtro = new Filtro(empresaId, data, de, ate, status, responsavelId, setorId, atrasadas, minhas, carteira);
         return service.listar(u, filtro, pageable);
+    }
+
+    @Operation(summary = "Empresas para o filtro de Tarefas do dia, com contagens da data (padrão: hoje). "
+            + "carteira=true mostra só as empresas da carteira do usuário logado")
+    @GetMapping("/empresas")
+    public List<EmpresaDoDiaResponse> empresasDoDia(UsuarioAutenticado u,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data,
+            @RequestParam(defaultValue = "false") boolean carteira) {
+        return service.empresasDoDia(u, data, carteira);
     }
 
     @GetMapping("/{id}")

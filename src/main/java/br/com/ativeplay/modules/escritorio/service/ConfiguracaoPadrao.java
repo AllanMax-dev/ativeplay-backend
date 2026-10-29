@@ -29,14 +29,16 @@ public class ConfiguracaoPadrao {
 
     /** ADMIN não precisa de linhas: tem acesso total. */
     private static final Map<Perfil, Map<Modulo, Nivel>> PERMISSOES = Map.of(
-            Perfil.GESTOR, Map.of(
-                    Modulo.PAINEL, Nivel.ESCRITA, Modulo.EMPRESAS, Nivel.ESCRITA, Modulo.TAREFAS, Nivel.ESCRITA,
-                    Modulo.CRM, Nivel.ESCRITA, Modulo.DOCUMENTOS, Nivel.ESCRITA, Modulo.RELATORIOS, Nivel.ESCRITA,
-                    Modulo.INTEGRACOES, Nivel.ESCRITA, Modulo.AUDITORIA, Nivel.LEITURA, Modulo.USUARIOS, Nivel.LEITURA,
-                    Modulo.CONFIGURACOES, Nivel.LEITURA),
+            Perfil.GESTOR, Map.ofEntries(
+                    Map.entry(Modulo.PAINEL, Nivel.ESCRITA), Map.entry(Modulo.EMPRESAS, Nivel.ESCRITA),
+                    Map.entry(Modulo.TAREFAS, Nivel.ESCRITA), Map.entry(Modulo.CRM, Nivel.ESCRITA),
+                    Map.entry(Modulo.DOCUMENTOS, Nivel.ESCRITA), Map.entry(Modulo.RELATORIOS, Nivel.ESCRITA),
+                    Map.entry(Modulo.INTEGRACOES, Nivel.ESCRITA), Map.entry(Modulo.AUDITORIA, Nivel.LEITURA),
+                    Map.entry(Modulo.USUARIOS, Nivel.LEITURA), Map.entry(Modulo.CONFIGURACOES, Nivel.LEITURA),
+                    Map.entry(Modulo.SENHAS, Nivel.ESCRITA)),
             Perfil.OPERADOR, Map.of(
                     Modulo.PAINEL, Nivel.LEITURA, Modulo.EMPRESAS, Nivel.LEITURA, Modulo.TAREFAS, Nivel.ESCRITA,
-                    Modulo.DOCUMENTOS, Nivel.ESCRITA, Modulo.CRM, Nivel.LEITURA));
+                    Modulo.DOCUMENTOS, Nivel.ESCRITA, Modulo.CRM, Nivel.LEITURA, Modulo.SENHAS, Nivel.ESCRITA));
 
     private static final List<String[]> SETORES = List.of(
             new String[] {"Financeiro", "#2563EB"},

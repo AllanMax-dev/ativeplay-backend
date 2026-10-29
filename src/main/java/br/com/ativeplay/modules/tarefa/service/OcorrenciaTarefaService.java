@@ -2,6 +2,8 @@ package br.com.ativeplay.modules.tarefa.service;
 
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.documento.domain.Documento;
+import br.com.ativeplay.modules.empresa.domain.Empresa;
+import br.com.ativeplay.modules.empresa.domain.StatusEmpresa;
 import br.com.ativeplay.modules.empresa.repository.EmpresaRepository;
 import br.com.ativeplay.modules.escritorio.repository.EscritorioRepository;
 import br.com.ativeplay.modules.notificacao.domain.TipoNotificacao;
@@ -16,6 +18,7 @@ import br.com.ativeplay.modules.tarefa.repository.OcorrenciaTarefaRepository;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.AnexoResponse;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.ComentarioRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.ComentarioResponse;
+import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.EmpresaDoDiaResponse;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.EmpresaRef;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaAvulsaRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaDetalheResponse;
@@ -23,6 +26,7 @@ import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaResponse
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.OcorrenciaUpdateRequest;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.Ref;
 import br.com.ativeplay.modules.tarefa.web.dto.OcorrenciaDtos.SetorRef;
+import br.com.ativeplay.modules.usuario.repository.UsuarioEmpresaRepository;
 import br.com.ativeplay.modules.usuario.repository.UsuarioRepository;
 import br.com.ativeplay.shared.erro.ApiException;
 import br.com.ativeplay.shared.escopo.EscopoService;
@@ -35,11 +39,13 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -60,12 +66,19 @@ public class OcorrenciaTarefaService {
 
     /** Filtros da listagem; todos opcionais. */
     public record Filtro(UUID empresaId, LocalDate data, LocalDate de, LocalDate ate, List<StatusOcorrencia> status,
-            UUID responsavelId, UUID setorId, boolean atrasadas, boolean minhas) {
+            UUID responsavelId, UUID setorId, boolean atrasadas, boolean minhas, boolean carteira) {
+
+        /** Compatível com as chamadas anteriores (sem o filtro de carteira). */
+        public Filtro(UUID empresaId, LocalDate data, LocalDate de, LocalDate ate, List<StatusOcorrencia> status,
+                UUID responsavelId, UUID setorId, boolean atrasadas, boolean minhas) {
+            this(empresaId, data, de, ate, status, responsavelId, setorId, atrasadas, minhas, false);
+        }
     }
 
     private final OcorrenciaTarefaRepository ocorrencias;
     private final ComentarioOcorrenciaRepository comentarios;
     private final EmpresaRepository empresas;
+    private final UsuarioEmpresaRepository carteira;
     private final UsuarioRepository usuarios;
     private final SetorRepository setores;
     private final EscritorioRepository escritorios;
@@ -78,7 +91,8 @@ public class OcorrenciaTarefaService {
 
     @Transactional(readOnly = true)
     public Pagina<OcorrenciaResponse> listar(UsuarioAutenticado u, Filtro f, Pageable pageable) {
-        var permitidas = escopo.empresasPermitidas(u);
+        var permitidas = f.carteira() && f.empresaId() == null ? Optional.of(minhaCarteira(u))
+                : escopo.empresasPermitidas(u);
         if (f.empresaId() != null) escopo.garantirAcesso(u, f.empresaId());
         if (f.empresaId() == null && permitidas.isPresent() && permitidas.get().isEmpty()) {
             return new Pagina<>(List.of(), 0, pageable.getPageNumber() + 1, pageable.getPageSize());
@@ -112,6 +126,80 @@ public class OcorrenciaTarefaService {
         var page = ocorrencias.findAll(spec, PageRequest.of(pageable.getPageNumber(), pageable.getPageSize()));
         var respostas = montar(u, page.getContent(), agora);
         return Pagina.de(new PageImpl<>(respostas, page.getPageable(), page.getTotalElements()));
+    }
+
+    /**
+     * Empresas que o usuário pode filtrar em "Tarefas do dia", com as contagens da data.
+     * Com {@code carteira=true}, apenas as empresas da carteira do próprio usuário
+     * (Configurações → Usuários → Carteira de empresas), mesmo para ADMIN e GESTOR.
+     */
+    @Transactional(readOnly = true)
+    public List<EmpresaDoDiaResponse> empresasDoDia(UsuarioAutenticado u, LocalDate data, boolean apenasCarteira) {
+        var dia = data != null ? data : Datas.hoje(fuso(u));
+        var daCarteira = new HashSet<>(carteira.findEmpresaIdsByUsuarioId(u.id()));
+        var permitidas = escopo.empresasPermitidas(u);
+
+        List<Empresa> lista;
+        if (apenasCarteira) {
+            var ids = daCarteira.stream()
+                    .filter(id -> permitidas.map(p -> p.contains(id)).orElse(true))
+                    .collect(Collectors.toSet());
+            lista = ids.isEmpty() ? List.of() : empresas.findByIdInAndEscritorioId(ids, u.escritorioId());
+        } else if (permitidas.isPresent()) {
+            lista = permitidas.get().isEmpty() ? List.of()
+                    : empresas.findByIdInAndEscritorioId(permitidas.get(), u.escritorioId());
+        } else {
+            lista = empresas.findByEscritorioId(u.escritorioId());
+        }
+        if (lista.isEmpty()) return List.of();
+
+        var ids = lista.stream().map(Empresa::getId).toList();
+        var agora = Instant.now();
+        var contagens = new HashMap<UUID, long[]>(); // total, abertas, emAndamento, concluidas, atrasadas
+        em.createQuery("""
+                        select o.empresaId, o.status, count(o),
+                               sum(case when o.prazo < :agora then 1 else 0 end)
+                        from OcorrenciaTarefa o
+                        where o.escritorioId = :esc and o.data = :dia and o.empresaId in :ids
+                        group by o.empresaId, o.status
+                        """, Object[].class)
+                .setParameter("agora", agora)
+                .setParameter("esc", u.escritorioId())
+                .setParameter("dia", dia)
+                .setParameter("ids", ids)
+                .getResultList()
+                .forEach(l -> {
+                    var c = contagens.computeIfAbsent((UUID) l[0], k -> new long[5]);
+                    var status = (StatusOcorrencia) l[1];
+                    var qtd = ((Number) l[2]).longValue();
+                    var vencidas = l[3] == null ? 0 : ((Number) l[3]).longValue();
+                    c[0] += qtd;
+                    if (OcorrenciaTarefa.ABERTAS.contains(status)) {
+                        c[1] += qtd;
+                        c[4] += vencidas;
+                    }
+                    if (status == StatusOcorrencia.EM_ANDAMENTO) c[2] += qtd;
+                    if (status == StatusOcorrencia.CONCLUIDA) c[3] += qtd;
+                });
+        var pendenciasChecklist = contagem(em.createQuery("""
+                        select c.empresaId, count(c) from ChecklistItem c
+                        where c.escritorioId = :esc and c.concluido = false and c.empresaId in :ids
+                        group by c.empresaId
+                        """, Object[].class)
+                .setParameter("esc", u.escritorioId())
+                .setParameter("ids", ids)
+                .getResultList());
+
+        return lista.stream()
+                .filter(e -> e.getStatus() != StatusEmpresa.ENCERRADA || contagens.containsKey(e.getId()))
+                .map(e -> {
+                    var c = contagens.getOrDefault(e.getId(), new long[5]);
+                    return new EmpresaDoDiaResponse(e.getId(), e.getRazaoSocial(), e.getNomeFantasia(),
+                            e.getStatus().name(), daCarteira.contains(e.getId()), c[0], c[1], c[2], c[3], c[4],
+                            pendenciasChecklist.getOrDefault(e.getId(), 0L));
+                })
+                .sorted(Comparator.comparing((EmpresaDoDiaResponse r) -> nomeExibicao(r).toLowerCase()))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -290,6 +378,16 @@ public class OcorrenciaTarefaService {
     }
 
     // ------------------------------------------------------------------ apoio
+
+    private List<UUID> minhaCarteira(UsuarioAutenticado u) {
+        var ids = carteira.findEmpresaIdsByUsuarioId(u.id());
+        // Nunca amplia o escopo: o OPERADOR já é limitado à própria carteira.
+        return escopo.empresasPermitidas(u).map(p -> ids.stream().filter(p::contains).toList()).orElse(ids);
+    }
+
+    private static String nomeExibicao(EmpresaDoDiaResponse r) {
+        return r.nomeFantasia() != null && !r.nomeFantasia().isBlank() ? r.nomeFantasia() : r.razaoSocial();
+    }
 
     private OcorrenciaTarefa buscar(UsuarioAutenticado u, UUID id) {
         var o = ocorrencias.findByIdAndEscritorioId(id, u.escritorioId())

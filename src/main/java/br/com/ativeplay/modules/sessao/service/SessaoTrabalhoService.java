@@ -2,22 +2,38 @@ package br.com.ativeplay.modules.sessao.service;
 
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.empresa.domain.Empresa;
+import br.com.ativeplay.modules.empresa.domain.StatusEmpresa;
 import br.com.ativeplay.modules.empresa.repository.EmpresaRepository;
+import br.com.ativeplay.modules.escritorio.repository.EscritorioRepository;
 import br.com.ativeplay.modules.sessao.domain.SessaoTrabalho;
 import br.com.ativeplay.modules.sessao.repository.SessaoTrabalhoRepository;
+import br.com.ativeplay.modules.sessao.web.dto.SessaoDtos.RentabilidadeEmpresa;
+import br.com.ativeplay.modules.sessao.web.dto.SessaoDtos.RentabilidadeResponse;
+import br.com.ativeplay.modules.sessao.web.dto.SessaoDtos.ResumoDiaResponse;
 import br.com.ativeplay.modules.sessao.web.dto.SessaoDtos.SessaoResponse;
+import br.com.ativeplay.modules.sessao.web.dto.SessaoDtos.TempoEmpresa;
 import br.com.ativeplay.modules.usuario.domain.Usuario;
 import br.com.ativeplay.modules.usuario.repository.UsuarioRepository;
 import br.com.ativeplay.shared.erro.ApiException;
 import br.com.ativeplay.shared.escopo.EscopoService;
 import br.com.ativeplay.shared.seguranca.Perfil;
 import br.com.ativeplay.shared.seguranca.UsuarioAutenticado;
+import br.com.ativeplay.shared.util.Datas;
 import br.com.ativeplay.shared.web.Pagina;
 import jakarta.persistence.criteria.Predicate;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -40,6 +56,7 @@ public class SessaoTrabalhoService {
     private final SessaoTrabalhoRepository sessoes;
     private final EmpresaRepository empresas;
     private final UsuarioRepository usuarios;
+    private final EscritorioRepository escritorios;
     private final EscopoService escopo;
     private final AuditoriaService auditoria;
 
@@ -94,6 +111,102 @@ public class SessaoTrabalhoService {
                 Sort.by(Sort.Direction.DESC, "inicio")));
         var respostas = montar(u, page.getContent(), Instant.now());
         return Pagina.de(new PageImpl<>(respostas, page.getPageable(), page.getTotalElements()));
+    }
+
+    /**
+     * Contador geral do dia: soma o tempo das sessões (entrou na empresa → saiu ou trocou)
+     * dentro do dia no fuso do escritório. OPERADOR consulta apenas o próprio resumo.
+     */
+    @Transactional(readOnly = true)
+    public ResumoDiaResponse resumoDia(UsuarioAutenticado u, LocalDate data, UUID usuarioId) {
+        var alvo = u.perfil() == Perfil.OPERADOR || usuarioId == null ? u.id() : usuarioId;
+        if (!alvo.equals(u.id())) escopo.garantirUsuarioDaEquipe(u, alvo);
+        var zona = Datas.zona(fuso(u));
+        var dia = data != null ? data : LocalDate.now(zona);
+        var de = dia.atStartOfDay(zona).toInstant();
+        var ate = dia.plusDays(1).atStartOfDay(zona).toInstant();
+        var agora = Instant.now();
+
+        var lista = sessoes.doUsuarioNoPeriodo(u.escritorioId(), alvo, de, ate);
+        var porEmpresa = new LinkedHashMap<UUID, long[]>(); // ms, quantidade
+        long total = 0;
+        for (var s : lista) {
+            var ms = sobreposicaoMs(s, de, ate, agora);
+            total += ms;
+            var c = porEmpresa.computeIfAbsent(s.getEmpresaId(), k -> new long[2]);
+            c[0] += ms;
+            c[1]++;
+        }
+        var nomes = nomesEmpresas(u, porEmpresa.keySet());
+        var tempos = porEmpresa.entrySet().stream()
+                .map(e -> new TempoEmpresa(e.getKey(), nomes.get(e.getKey()), e.getValue()[0], (int) e.getValue()[1]))
+                .sorted(Comparator.comparingLong(TempoEmpresa::totalMs).reversed())
+                .toList();
+        var atual = sessoes.findByUsuarioIdAndFimIsNull(alvo).map(s -> montar(u, List.of(s), agora).getFirst())
+                .orElse(null);
+        return new ResumoDiaResponse(dia, alvo, total, atual, tempos, agora);
+    }
+
+    /**
+     * Tempo da equipe por empresa x honorário (ADMIN e GESTOR): mostra quais clientes demandam
+     * mais horas do que pagam. Padrão: últimos 30 dias até hoje.
+     */
+    @Transactional(readOnly = true)
+    public RentabilidadeResponse rentabilidade(UsuarioAutenticado u, LocalDate de, LocalDate ate) {
+        var zona = Datas.zona(fuso(u));
+        var fimPeriodo = ate != null ? ate : LocalDate.now(zona);
+        var inicioPeriodo = de != null ? de : fimPeriodo.minusDays(29);
+        if (inicioPeriodo.isAfter(fimPeriodo)) throw ApiException.invalido("A data inicial deve ser anterior à final");
+        if (ChronoUnit.DAYS.between(inicioPeriodo, fimPeriodo) > 366) {
+            throw ApiException.invalido("O período máximo é de um ano");
+        }
+        var inicio = inicioPeriodo.atStartOfDay(zona).toInstant();
+        var fim = fimPeriodo.plusDays(1).atStartOfDay(zona).toInstant();
+        var agora = Instant.now();
+
+        var tempo = new HashMap<UUID, Long>();
+        var pessoas = new HashMap<UUID, Set<UUID>>();
+        for (var s : sessoes.doEscritorioNoPeriodo(u.escritorioId(), inicio, fim)) {
+            tempo.merge(s.getEmpresaId(), sobreposicaoMs(s, inicio, fim, agora), Long::sum);
+            pessoas.computeIfAbsent(s.getEmpresaId(), k -> new HashSet<>()).add(s.getUsuarioId());
+        }
+        var dias = ChronoUnit.DAYS.between(inicioPeriodo, fimPeriodo) + 1;
+        var proporcao = BigDecimal.valueOf(dias).divide(BigDecimal.valueOf(30), 6, RoundingMode.HALF_UP);
+
+        var linhas = empresas.findByEscritorioId(u.escritorioId()).stream()
+                .filter(e -> tempo.containsKey(e.getId()) || e.getStatus() == StatusEmpresa.ATIVA)
+                .map(e -> {
+                    long ms = tempo.getOrDefault(e.getId(), 0L);
+                    BigDecimal valorHora = null;
+                    if (e.getHonorarioMensal() != null && ms > 0) {
+                        var horas = BigDecimal.valueOf(ms).divide(BigDecimal.valueOf(3_600_000L), 6, RoundingMode.HALF_UP);
+                        valorHora = e.getHonorarioMensal().multiply(proporcao).divide(horas, 2, RoundingMode.HALF_UP);
+                    }
+                    return new RentabilidadeEmpresa(e.getId(), nomeEmpresa(e), ms,
+                            pessoas.getOrDefault(e.getId(), Set.of()).size(), e.getHonorarioMensal(), valorHora);
+                })
+                .sorted(Comparator.comparingLong(RentabilidadeEmpresa::totalMs).reversed())
+                .toList();
+        long total = linhas.stream().mapToLong(RentabilidadeEmpresa::totalMs).sum();
+        return new RentabilidadeResponse(inicioPeriodo, fimPeriodo, total, linhas);
+    }
+
+    /** Parte da sessão que cai dentro de [de, ate); a sessão aberta conta até agora. */
+    private static long sobreposicaoMs(SessaoTrabalho s, Instant de, Instant ate, Instant agora) {
+        var inicio = s.getInicio().isBefore(de) ? de : s.getInicio();
+        var fimSessao = s.getFim() != null ? s.getFim() : agora;
+        var fim = fimSessao.isAfter(ate) ? ate : fimSessao;
+        return Math.max(0, Duration.between(inicio, fim).toMillis());
+    }
+
+    private java.util.Map<UUID, String> nomesEmpresas(UsuarioAutenticado u, Set<UUID> ids) {
+        if (ids.isEmpty()) return java.util.Map.of();
+        return empresas.findByIdInAndEscritorioId(ids, u.escritorioId()).stream()
+                .collect(Collectors.toMap(Empresa::getId, SessaoTrabalhoService::nomeEmpresa));
+    }
+
+    private String fuso(UsuarioAutenticado u) {
+        return escritorios.findById(u.escritorioId()).map(e -> e.getFusoHorario()).orElse(null);
     }
 
     private List<SessaoResponse> montar(UsuarioAutenticado u, List<SessaoTrabalho> lista, Instant agora) {
