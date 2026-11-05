@@ -14,7 +14,6 @@ import org.springframework.validation.annotation.Validated;
 public record AtivePlayProperties(
         List<String> corsOrigins,
         @NotNull Jwt jwt,
-        @NotBlank String encryptionKey,
         @NotBlank String uploadDir,
         boolean jobsEnabled) {
 

@@ -57,7 +57,11 @@ ativeplay:
     secret: ${JWT_ACCESS_SECRET}
     access-ttl: ${JWT_ACCESS_TTL:15m}
     refresh-ttl-dias: ${JWT_REFRESH_TTL_DAYS:30}
-  encryption-key: ${ENCRYPTION_KEY}
+  criptografia:
+    chave-ativa-id: ${ENCRYPTION_ACTIVE_KEY_ID:}
+    chave-ativa: ${ENCRYPTION_ACTIVE_KEY:}
+    chave-legada: ${ENCRYPTION_KEY:}
+    chaves-anteriores: '${ENCRYPTION_PREVIOUS_KEYS:}'
   upload-dir: ${UPLOAD_DIR:./storage}
   jobs-enabled: ${JOBS_ENABLED:true}
   storage:

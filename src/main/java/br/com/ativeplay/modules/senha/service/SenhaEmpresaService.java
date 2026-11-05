@@ -1,6 +1,5 @@
 package br.com.ativeplay.modules.senha.service;
 
-import br.com.ativeplay.config.AtivePlayProperties;
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.senha.domain.CategoriaSenha;
 import br.com.ativeplay.modules.senha.domain.SenhaEmpresa;
@@ -13,7 +12,7 @@ import br.com.ativeplay.modules.usuario.web.dto.UsuarioRef;
 import br.com.ativeplay.shared.erro.ApiException;
 import br.com.ativeplay.shared.escopo.EscopoService;
 import br.com.ativeplay.shared.seguranca.UsuarioAutenticado;
-import br.com.ativeplay.shared.util.Cripto;
+import br.com.ativeplay.shared.util.CofreCifras;
 import java.text.Normalizer;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Cofre de senhas de cada cliente (bancos, certificado, portais). A senha é cifrada com
- * AES-256-GCM (ENCRYPTION_KEY) antes de gravar, não aparece em listagens nem na auditoria,
+ * AES-256-GCM com chave ativa versionada antes de gravar, não aparece em listagens nem na auditoria,
  * e cada visualização fica registrada na trilha de auditoria.
  */
 @Service
@@ -41,7 +40,7 @@ public class SenhaEmpresaService {
     private final UsuarioRepository usuarios;
     private final EscopoService escopo;
     private final AuditoriaService auditoria;
-    private final AtivePlayProperties props;
+    private final CofreCifras cofre;
 
     @Transactional(readOnly = true)
     public List<SenhaResponse> listar(UsuarioAutenticado u, UUID empresaId, String busca, CategoriaSenha categoria) {
@@ -63,7 +62,7 @@ public class SenhaEmpresaService {
         s.setCriadoPorId(u.id());
         s.setAtualizadoPorId(u.id());
         aplicar(s, req);
-        if (req.senha() != null && !req.senha().isEmpty()) s.setSenhaCifrada(Cripto.cifrar(req.senha(), props.encryptionKey()));
+        if (req.senha() != null && !req.senha().isEmpty()) s.setSenhaCifrada(cofre.cifrar(req.senha()));
         senhas.save(s);
         auditoria.registrar(u, "senha.criar", "senha", s.getId(), empresaId, "Acesso " + s.getAcesso() + " cadastrado");
         return montar(u, List.of(s)).getFirst();
@@ -77,7 +76,7 @@ public class SenhaEmpresaService {
             s.setSenhaCifrada(null);
             trocouSenha = true;
         } else if (req.senha() != null && !req.senha().isEmpty()) {
-            s.setSenhaCifrada(Cripto.cifrar(req.senha(), props.encryptionKey()));
+            s.setSenhaCifrada(cofre.cifrar(req.senha()));
             trocouSenha = true;
         }
         s.setAtualizadoPorId(u.id());
@@ -93,7 +92,7 @@ public class SenhaEmpresaService {
         if (s.getSenhaCifrada() == null) throw ApiException.naoEncontrado("Senha deste acesso");
         auditoria.registrar(u, "senha.revelar", "senha", s.getId(), empresaId,
                 "Senha do acesso " + s.getAcesso() + " visualizada");
-        return new SenhaReveladaResponse(s.getId(), Cripto.decifrar(s.getSenhaCifrada(), props.encryptionKey()));
+        return new SenhaReveladaResponse(s.getId(), cofre.decifrar(s.getSenhaCifrada()));
     }
 
     public void excluir(UsuarioAutenticado u, UUID empresaId, UUID id) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.ativeplay.ApiDeTeste;
 import br.com.ativeplay.IntegracaoTest;
 import br.com.ativeplay.modules.senha.repository.SenhaEmpresaRepository;
+import br.com.ativeplay.shared.util.CriptoVersionadaTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -158,5 +159,22 @@ class AreaDoClienteIntegracaoTest extends IntegracaoTest {
         var r = api.post("/api/v1/tarefas/ocorrencias", token, Map.of("empresaId", empresaId, "titulo", titulo,
                 "data", DATA));
         assertThat(r.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void revelaLegadoEAtualizacaoDeSenhaGravaEnvelopeAtivo() throws Exception {
+        var base = "/api/v1/empresas/" + empresaA + "/senhas";
+        var criada = api.post(base, token, Map.of("acesso", "Acesso de teste", "senha", "nova"));
+        assertThat(criada.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        var id = UUID.fromString((String) criada.getBody().get("id"));
+        var registro = senhasRepo.findById(id).orElseThrow();
+        assertThat(registro.getSenhaCifrada()).startsWith("apc:1:teste:");
+        registro.setSenhaCifrada(CriptoVersionadaTest.legado("antiga", CHAVE_LEGADA));
+        senhasRepo.saveAndFlush(registro);
+        assertThat(api.get(base + "/" + id + "/senha", token).getBody()).containsEntry("senha", "antiga");
+        assertThat(api.put(base + "/" + id, token, Map.of("acesso", "Editado", "senha", "substituta")).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(senhasRepo.findById(id).orElseThrow().getSenhaCifrada()).startsWith("apc:1:teste:");
+        assertThat(api.get(base + "/" + id + "/senha", token).getBody()).containsEntry("senha", "substituta");
     }
 }

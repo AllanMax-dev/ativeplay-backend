@@ -122,7 +122,9 @@ Ative o perfil `prod` com `SPRING_PROFILES_ACTIVE=prod` (arquivo `application-pr
 - **conecta ao banco com SSL** (`sslmode=require`): `jdbc:postgresql://DB_HOST:POSTGRES_PORT/POSTGRES_DB?sslmode=DB_SSLMODE`;
 - **não carrega o seed**: o perfil `seed` só roda se for pedido explicitamente.
 
-Variáveis a configurar no painel do Render (nunca no Git): `DB_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `ENCRYPTION_KEY`, `CORS_ORIGINS` (URL do front na Vercel) e `SPRING_PROFILES_ACTIVE`. A porta vem de `PORT`, que o Render injeta sozinho.
+Variáveis a configurar no painel do Render (nunca no Git): `DB_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_ACCESS_SECRET`, `ENCRYPTION_ACTIVE_KEY_ID`, `ENCRYPTION_ACTIVE_KEY`, `CORS_ORIGINS` (URL do front na Vercel) e `SPRING_PROFILES_ACTIVE`. Preserve `ENCRYPTION_KEY` para ler cifras legadas e configure `ENCRYPTION_PREVIOUS_KEYS` enquanto houver versões anteriores. A porta vem de `PORT`, que o Render injeta sozinho.
+
+Antes de atualizar uma instalação existente, siga [a preparação e o rollback da rotação de cifras](docs/rotacao-cifras.md). A chave ativa nova é obrigatória; não substitua nem descarte a chave legada. A migração de dados é um comando operacional separado e não roda no deploy.
 
 Supabase: use o **session pooler** (porta `5432`; `POSTGRES_USER` no formato `postgres.<ref-do-projeto>`) com SSL.
 
@@ -162,7 +164,9 @@ Os testes de integração sobem um PostgreSQL 16 temporário via Testcontainers 
 | `DB_SSLMODE` | `require` | Só no perfil `prod`: modo SSL da conexão (`require` para o Supabase) |
 | `JWT_ACCESS_SECRET` | — | Segredo HS256, mínimo 32 caracteres |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL_DAYS` | `15m` / `30` | Validade dos tokens |
-| `ENCRYPTION_KEY` | — | 32 bytes em base64 para cifrar credenciais de ERP (`openssl rand -base64 32`) |
+| `ENCRYPTION_ACTIVE_KEY_ID` / `ENCRYPTION_ACTIVE_KEY` | — | ID imutável e chave nova de 32 bytes em Base64 para senhas e integrações; obrigatórios e exclusivos por ambiente |
+| `ENCRYPTION_KEY` | vazio | Chave antiga, somente para ler cifras legadas durante a migração |
+| `ENCRYPTION_PREVIOUS_KEYS` | vazio | JSON de IDs para chaves anteriores, somente leitura; ver [rotação](docs/rotacao-cifras.md) |
 | `UPLOAD_DIR` | `./storage` | Pasta dos arquivos enviados |
 | `STORAGE_TIPO` | `local` | Onde guardar os arquivos: `local` (disco, `UPLOAD_DIR`) ou `s3` (bucket S3 compatível, ex.: Supabase Storage) |
 | `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | — / `us-east-1` / — | Só com `STORAGE_TIPO=s3`: endpoint, região e bucket |

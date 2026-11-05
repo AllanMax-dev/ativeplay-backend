@@ -1,6 +1,5 @@
 package br.com.ativeplay.seed;
 
-import br.com.ativeplay.config.AtivePlayProperties;
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.checklist.domain.ChecklistItem;
 import br.com.ativeplay.modules.checklist.domain.ChecklistModeloItem;
@@ -55,7 +54,7 @@ import br.com.ativeplay.modules.usuario.repository.UsuarioRepository;
 import br.com.ativeplay.modules.usuario.repository.UsuarioSetorRepository;
 import br.com.ativeplay.shared.seguranca.Perfil;
 import br.com.ativeplay.shared.util.Cnpj;
-import br.com.ativeplay.shared.util.Cripto;
+import br.com.ativeplay.shared.util.CofreCifras;
 import br.com.ativeplay.shared.util.Datas;
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -113,7 +112,7 @@ public class DemoSeeder implements ApplicationRunner {
     private final ChecklistItemRepository checklist;
     private final ChecklistModeloItemRepository checklistModelo;
     private final SenhaEmpresaRepository senhasEmpresa;
-    private final AtivePlayProperties props;
+    private final CofreCifras cofre;
 
     /** Gerador com semente fixa: o seed é reproduzível. */
     private final Random random = new Random(20261017);
@@ -314,7 +313,7 @@ public class DemoSeeder implements ApplicationRunner {
             senha.setAcesso(a[0]);
             senha.setCategoria(CategoriaSenha.valueOf(a[1]));
             senha.setUsuario(a[2]);
-            senha.setSenhaCifrada(Cripto.cifrar(a[3], props.encryptionKey()));
+            senha.setSenhaCifrada(cofre.cifrar(a[3]));
             senha.setUrl(a[4]);
             senha.setCriadoPorId(op1.getId());
             senha.setAtualizadoPorId(op1.getId());

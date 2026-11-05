@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class DatasECriptoTest {
 
-    private static final String CHAVE = Base64.getEncoder().encodeToString(new byte[32]);
+    private static final String CHAVE = CriptoVersionadaTest.novaChave();
 
     @Test
     void diaSemanaSegueConvencaoDoFrontend() {
@@ -30,18 +30,18 @@ class DatasECriptoTest {
 
     @Test
     void cifraEDecifraComAesGcm() {
-        var cifrado = Cripto.cifrar("{\"appKey\":\"123\"}", CHAVE);
+        var cifrado = Cripto.cifrar("{\"appKey\":\"123\"}", CHAVE, "teste");
         assertThat(cifrado).doesNotContain("appKey");
-        assertThat(Cripto.decifrar(cifrado, CHAVE)).isEqualTo("{\"appKey\":\"123\"}");
-        assertThat(Cripto.cifrar("x", CHAVE)).isNotEqualTo(Cripto.cifrar("x", CHAVE)); // IV aleatório
+        assertThat(Cripto.decifrar(cifrado, id -> CHAVE, null)).isEqualTo("{\"appKey\":\"123\"}");
+        assertThat(Cripto.cifrar("x", CHAVE, "teste")).isNotEqualTo(Cripto.cifrar("x", CHAVE, "teste")); // IV aleatório
     }
 
     @Test
     void detectaAdulteracaoDoTextoCifrado() {
-        var bytes = Base64.getDecoder().decode(Cripto.cifrar("segredo", CHAVE));
+        var bytes = Base64.getDecoder().decode(Cripto.cifrar("segredo", CHAVE, "teste").split(":")[3]);
         bytes[bytes.length - 1] ^= 1;
-        var adulterado = Base64.getEncoder().encodeToString(bytes);
-        assertThatThrownBy(() -> Cripto.decifrar(adulterado, CHAVE)).isInstanceOf(IllegalStateException.class);
+        var adulterado = "apc:1:teste:" + Base64.getEncoder().encodeToString(bytes);
+        assertThatThrownBy(() -> Cripto.decifrar(adulterado, id -> CHAVE, null)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

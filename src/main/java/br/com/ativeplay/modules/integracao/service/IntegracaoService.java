@@ -1,6 +1,5 @@
 package br.com.ativeplay.modules.integracao.service;
 
-import br.com.ativeplay.config.AtivePlayProperties;
 import br.com.ativeplay.modules.auditoria.service.AuditoriaService;
 import br.com.ativeplay.modules.empresa.domain.Empresa;
 import br.com.ativeplay.modules.empresa.repository.EmpresaRepository;
@@ -22,7 +21,7 @@ import br.com.ativeplay.modules.notificacao.service.NotificacaoService;
 import br.com.ativeplay.shared.erro.ApiException;
 import br.com.ativeplay.shared.escopo.EscopoService;
 import br.com.ativeplay.shared.seguranca.UsuarioAutenticado;
-import br.com.ativeplay.shared.util.Cripto;
+import br.com.ativeplay.shared.util.CofreCifras;
 import br.com.ativeplay.shared.web.Pagina;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -62,7 +61,7 @@ public class IntegracaoService {
     private final EscopoService escopo;
     private final AuditoriaService auditoria;
     private final NotificacaoService notificacoes;
-    private final AtivePlayProperties props;
+    private final CofreCifras cofre;
     private final ObjectMapper json;
     private final PlatformTransactionManager transacoes;
 
@@ -252,7 +251,7 @@ public class IntegracaoService {
 
     private String cifrar(Map<String, String> credenciais) {
         try {
-            return Cripto.cifrar(json.writeValueAsString(credenciais), props.encryptionKey());
+            return cofre.cifrar(json.writeValueAsString(credenciais));
         } catch (JsonProcessingException e) {
             throw ApiException.invalido("Credenciais inválidas");
         }
@@ -260,9 +259,9 @@ public class IntegracaoService {
 
     private Map<String, String> decifrar(Integracao i) {
         try {
-            return json.readValue(Cripto.decifrar(i.getCredenciaisCifradas(), props.encryptionKey()), MAPA);
+            return json.readValue(cofre.decifrar(i.getCredenciaisCifradas()), MAPA);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Credenciais corrompidas na integração " + i.getId(), e);
+            throw new IllegalStateException("Credenciais corrompidas na integração " + i.getId());
         }
     }
 

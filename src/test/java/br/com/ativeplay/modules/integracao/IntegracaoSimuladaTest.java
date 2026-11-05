@@ -7,6 +7,9 @@ import br.com.ativeplay.IntegracaoTest;
 import br.com.ativeplay.modules.integracao.provedor.ContaAzulProvedor;
 import br.com.ativeplay.modules.integracao.provedor.OmieProvedor;
 import br.com.ativeplay.shared.erro.ApiException;
+import br.com.ativeplay.shared.util.CriptoVersionadaTest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,9 @@ import org.springframework.http.ResponseEntity;
 
 /** Provedores Conta Azul e Omie são simulados: validam credenciais e fingem sincronizar. */
 class IntegracaoSimuladaTest extends IntegracaoTest {
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     private static final ParameterizedTypeReference<Map<String, Object>> MAPA = new ParameterizedTypeReference<>() {
     };
@@ -48,7 +54,7 @@ class IntegracaoSimuladaTest extends IntegracaoTest {
     }
 
     @Test
-    void fluxoCompletoTestaESincronizaSemErro501() {
+    void fluxoCompletoTestaESincronizaSemErro501() throws Exception {
         var email = "teste-" + UUID.randomUUID() + "@ativeplay.dev";
         var token = (String) post("/api/v1/auth/registrar", null, Map.of("nomeEscritorio", "Esc " + email,
                 "nome", "Admin", "email", email, "senha", "senha1234")).getBody().get("accessToken");
@@ -59,6 +65,10 @@ class IntegracaoSimuladaTest extends IntegracaoTest {
                 "credenciais", Map.of("appKey", "chave", "appSecret", "segredo")));
         assertThat(criada.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         var id = (String) criada.getBody().get("id");
+        assertThat(jdbc.queryForObject("SELECT credenciais_cifradas FROM integracoes WHERE id=?", String.class,
+                UUID.fromString(id))).startsWith("apc:1:teste:");
+        jdbc.update("UPDATE integracoes SET credenciais_cifradas=? WHERE id=?",
+                CriptoVersionadaTest.legado("{\"appKey\":\"teste\",\"appSecret\":\"teste\"}", CHAVE_LEGADA), UUID.fromString(id));
 
         var teste = post("/api/v1/integracoes/" + id + "/testar", token, null);
         assertThat(teste.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -73,6 +83,12 @@ class IntegracaoSimuladaTest extends IntegracaoTest {
         var historico = http.exchange("/api/v1/integracoes/" + id + "/sincronizacoes", HttpMethod.GET,
                 new HttpEntity<>(headers(token)), MAPA);
         assertThat((List<?>) historico.getBody().get("dados")).hasSize(1);
+
+        var editada = http.exchange("/api/v1/integracoes/" + id, HttpMethod.PUT,
+                new HttpEntity<>(Map.of("credenciais", Map.of("appKey", "nova", "appSecret", "nova")), headers(token)), MAPA);
+        assertThat(editada.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(jdbc.queryForObject("SELECT credenciais_cifradas FROM integracoes WHERE id=?", String.class,
+                UUID.fromString(id))).startsWith("apc:1:teste:");
     }
 
     private ResponseEntity<Map<String, Object>> post(String url, String token, Object corpo) {
