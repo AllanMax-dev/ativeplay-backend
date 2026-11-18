@@ -33,4 +33,8 @@ public class RefreshToken extends EntidadeBase {
 
     @Column(length = 45)
     private String ip;
+
+    @Column(name = "sessao_acesso_id")
+    private UUID sessaoAcessoId;
+
 }
