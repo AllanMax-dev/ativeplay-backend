@@ -45,20 +45,28 @@ public class AuthService {
     private final UsuarioRepository usuarios;
     private final EscritorioRepository escritorios;
     private final RefreshTokenRepository refreshTokens;
+    private final SessaoAcessoService sessoesAcesso;
     private final ConfiguracaoPadrao configuracaoPadrao;
     private final AuditoriaService auditoria;
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final AtivePlayProperties props;
 
-    /** Hash usado quando o e-mail não existe, para o login levar o mesmo tempo nos dois casos. */
+    /**
+     * Hash usado quando o e-mail não existe, para o login levar o mesmo tempo nos
+     * dois casos.
+     */
     private String hashFicticio;
 
-    /** Onboarding self-service: cria o escritório (tenant), o administrador e a configuração padrão. */
+    /**
+     * Onboarding self-service: cria o escritório (tenant), o administrador e a
+     * configuração padrão.
+     */
     @Transactional
     public SessaoResponse registrar(RegistrarEscritorioRequest req, Contexto ctx) {
         var email = req.email().trim().toLowerCase(Locale.ROOT);
-        if (usuarios.existsByEmail(email)) throw ApiException.conflito("E-mail já cadastrado");
+        if (usuarios.existsByEmail(email))
+            throw ApiException.conflito("E-mail já cadastrado");
 
         var escritorio = new Escritorio();
         escritorio.setNome(req.nomeEscritorio().trim());
@@ -77,7 +85,8 @@ public class AuthService {
 
         auditoria.registrar(escritorio.getId(), admin.getId(), "escritorio.criar", "escritorio", escritorio.getId(),
                 null, "Escritório " + escritorio.getNome() + " cadastrado", null);
-        return emitirSessao(admin, ctx);
+        var sessaoAcesso = sessoesAcesso.iniciar(admin);
+        return emitirSessao(admin, ctx, sessaoAcesso.getId());
     }
 
     @Transactional
@@ -90,7 +99,8 @@ public class AuthService {
         usuario.setUltimoAcesso(Instant.now());
         auditoria.registrar(usuario.getEscritorioId(), usuario.getId(), "auth.login", "usuario", usuario.getId(), null,
                 null, null);
-        return emitirSessao(usuario, ctx);
+        var sessaoAcesso = sessoesAcesso.iniciar(usuario);
+        return emitirSessao(usuario, ctx, sessaoAcesso.getId());
     }
 
     /** Rotação: o refresh token usado é revogado e um novo par é emitido. */
@@ -100,23 +110,31 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.naoAutorizado("Sessão inválida"));
         var agora = Instant.now();
         if (registro.getRevogadoEm() != null) {
-            // Reuso de um token já rotacionado indica vazamento: encerra todas as sessões do usuário.
             refreshTokens.revogarTodos(registro.getUsuarioId(), agora);
+            sessoesAcesso.encerrarTodas(registro.getUsuarioId());
             throw ApiException.naoAutorizado("Sessão inválida");
         }
-        if (registro.getExpiraEm().isBefore(agora)) throw ApiException.naoAutorizado("Sessão expirada");
+        if (registro.getExpiraEm().isBefore(agora))
+            throw ApiException.naoAutorizado("Sessão expirada");
 
         var usuario = usuarios.findById(registro.getUsuarioId()).orElseThrow();
-        if (!usuario.isAtivo() || !escritorioAtivo(usuario)) throw ApiException.naoAutorizado("Usuário inativo");
+        if (!usuario.isAtivo() || !escritorioAtivo(usuario))
+            throw ApiException.naoAutorizado("Usuário inativo");
+
         registro.setRevogadoEm(agora);
-        return emitirSessao(usuario, ctx);
+        return emitirSessao(usuario, ctx, registro.getSessaoAcessoId());
     }
 
     @Transactional
     public void logout(String refreshToken) {
         refreshTokens.findByTokenHash(Cripto.sha256(refreshToken))
                 .filter(t -> t.getRevogadoEm() == null)
-                .ifPresent(t -> t.setRevogadoEm(Instant.now()));
+                .ifPresent(token -> {
+                    token.setRevogadoEm(Instant.now());
+
+                    sessoesAcesso.encerrar(
+                            token.getSessaoAcessoId());
+                });
     }
 
     @Transactional
@@ -127,16 +145,20 @@ public class AuthService {
         }
         usuario.setSenhaHash(passwordEncoder.encode(req.novaSenha()));
         refreshTokens.revogarTodos(u.id(), Instant.now());
+        sessoesAcesso.encerrarTodas(u.id());
         auditoria.registrar(u, "auth.alterar_senha", "usuario", u.id(), null, null);
     }
 
     /** Revoga todas as sessões do usuário (desativação, redefinição de senha). */
+
     @Transactional
     public void revogarSessoes(UUID usuarioId) {
         refreshTokens.revogarTodos(usuarioId, Instant.now());
+        sessoesAcesso.encerrarTodas(usuarioId);
     }
 
-    private SessaoResponse emitirSessao(Usuario usuario, Contexto ctx) {
+    private SessaoResponse emitirSessao(Usuario usuario, Contexto ctx, UUID sessaoAcessoId) {
+
         var agora = Instant.now();
         var ttl = props.jwt().accessTtl();
         var claims = JwtClaimsSet.builder()
@@ -146,17 +168,24 @@ public class AuthService {
                 .expiresAt(agora.plus(ttl))
                 .claim("esc", usuario.getEscritorioId().toString())
                 .claim("perfil", usuario.getPerfil().name());
-        if (usuario.getEmpresaId() != null) claims.claim("emp", usuario.getEmpresaId().toString());
+
+        if (sessaoAcessoId != null) {
+            claims.claim("sid", sessaoAcessoId.toString());
+        }
+        if (usuario.getEmpresaId() != null)
+            claims.claim("emp", usuario.getEmpresaId().toString());
         var accessToken = jwtEncoder.encode(JwtEncoderParameters.from(
                 JwsHeader.with(MacAlgorithm.HS256).build(), claims.build())).getTokenValue();
 
         var refresh = Cripto.tokenAleatorio(48);
         var registro = new RefreshToken();
         registro.setUsuarioId(usuario.getId());
+        registro.setSessaoAcessoId(sessaoAcessoId);
         registro.setTokenHash(Cripto.sha256(refresh));
         registro.setExpiraEm(agora.plus(Duration.ofDays(props.jwt().refreshTtlDias())));
         registro.setIp(ctx.ip());
-        registro.setUserAgent(ctx.userAgent() == null ? null : ctx.userAgent().substring(0, Math.min(255, ctx.userAgent().length())));
+        registro.setUserAgent(
+                ctx.userAgent() == null ? null : ctx.userAgent().substring(0, Math.min(255, ctx.userAgent().length())));
         refreshTokens.save(registro);
 
         return new SessaoResponse(accessToken, refresh, "Bearer", ttl.toSeconds(), new UsuarioResumo(usuario.getId(),
@@ -169,7 +198,8 @@ public class AuthService {
     }
 
     private String hashFicticio() {
-        if (hashFicticio == null) hashFicticio = passwordEncoder.encode(UUID.randomUUID().toString());
+        if (hashFicticio == null)
+            hashFicticio = passwordEncoder.encode(UUID.randomUUID().toString());
         return hashFicticio;
     }
 
@@ -179,10 +209,13 @@ public class AuthService {
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-|-$", "");
-        if (base.isEmpty()) base = "escritorio";
-        if (base.length() > 60) base = base.substring(0, 60);
+        if (base.isEmpty())
+            base = "escritorio";
+        if (base.length() > 60)
+            base = base.substring(0, 60);
         var slug = base;
-        for (int i = 2; escritorios.existsBySlug(slug); i++) slug = base + "-" + i;
+        for (int i = 2; escritorios.existsBySlug(slug); i++)
+            slug = base + "-" + i;
         return slug;
     }
 }
