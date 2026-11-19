@@ -27,4 +27,11 @@ public class SessaoAcesso {
     private Instant inicio;
 
     private Instant fim;
+
+    @Column(name = "ultimo_sinal")
+    private Instant ultimoSinal;
+
+    /** Sem sinal do navegador pelo tempo limite: fim continua nulo até o gestor informar a saída. */
+    @Column(nullable = false)
+    private boolean pendente;
 }

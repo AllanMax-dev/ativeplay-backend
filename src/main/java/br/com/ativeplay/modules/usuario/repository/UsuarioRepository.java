@@ -24,4 +24,6 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID>, JpaSpec
     List<Usuario> findByEmpresaId(UUID empresaId);
 
     long countByEscritorioId(UUID escritorioId);
+
+    List<Usuario> findByEscritorioIdAndPerfilNot(UUID escritorioId, Perfil perfil);
 }

@@ -31,6 +31,7 @@ erDiagram
     escritorios ||--o{ etapas_crm : "define funil"
 
     usuarios ||--o{ refresh_tokens : "sessões"
+    usuarios ||--o{ sessoes_acesso : "ponto"
     usuarios ||--o{ usuario_setores : ""
     setores  ||--o{ usuario_setores : ""
     usuarios ||--o{ usuario_empresas : "carteira"
@@ -141,6 +142,7 @@ erDiagram
 - **`usuarios`** — equipe do escritório e usuários do portal. `perfil = CLIENTE` exige `empresa_id`; o e-mail é único na plataforma (o login não pede o escritório).
 - **`permissoes_perfil`** — matriz perfil × módulo (`leitura`/`escrita`) por escritório; espelha o `can(mod)` do frontend. ADMIN tem acesso total sem precisar de linhas.
 - **`refresh_tokens`** — sessões com rotação; reusar um token já rotacionado revoga todas as sessões do usuário.
+- **`sessoes_acesso`** (V5, V6) — ponto eletrônico da equipe (CLIENTE não usa): um registro por entrada, aberto no login/cadastro e fechado no logout, na troca de senha, na desativação ou no próximo login (`refresh_tokens.sessao_acesso_id` liga o token ao registro; o token carrega o registro no claim `sid`). `ultimo_sinal` é o último sinal de vida do navegador (`POST /sessoes-acesso/sinal`). Sem sinal por `ativeplay.ponto.pendente-minutos` (padrão 15), o job marca `pendente = true` e `fim` continua nulo: a duração conta só até `coalesce(ultimo_sinal, inicio)` até um ADMIN/GESTOR informar a saída (`PATCH /sessoes-acesso/{id}/saida`, auditado como `ponto.ajustar_saida`). Fechado ou pendente, o refresh token do registro dá 401 "Sessão encerrada" e o login abre um registro novo. A V6 transformou em pendentes os registros abertos mais antigos de quem tinha mais de um aberto.
 
 ### Organização
 - **`setores`** — Financeiro, Contábil, Fiscal, Departamento Pessoal (criados por padrão, configuráveis).
@@ -203,6 +205,8 @@ Tabelas de apoio: **`comentarios_ocorrencia`**, **`documentos`** (documentos da 
 | `uq_ocorrencias_definicao_data` | Uma ocorrência por definição e data: a geração diária pode rodar várias vezes sem duplicar. |
 | `ck_ocorrencias_cronometro` | Cronômetro só pode estar rodando em tarefa `EM_ANDAMENTO`. |
 | `uq_sessoes_aberta_usuario` (índice parcial) | No máximo uma sessão de trabalho aberta por usuário. |
+| `uq_sessoes_acesso_aberta_usuario` (índice parcial, `fim IS NULL AND pendente = false`) | No máximo um registro de ponto aberto por usuário; pendentes não contam. |
+| `ck_sessoes_acesso_periodo` | `fim` nunca é anterior a `inicio`. |
 | `uq_integracoes_empresa_provedor` | Uma conexão por empresa e ERP. |
 | `CHECK`s de formato | `horario_limite` em `HH:MM`, `dia_mes` entre 1 e 31, valores de enumeração, `tempo_gasto_ms >= 0`. |
 

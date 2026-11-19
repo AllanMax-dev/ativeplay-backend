@@ -82,7 +82,7 @@ ativeplay-backend/
 
 | Módulo | Responsabilidade |
 | --- | --- |
-| `auth` | Cadastro de escritório (onboarding), login, refresh com rotação, logout, `me`, troca de senha |
+| `auth` | Cadastro de escritório (onboarding), login, refresh com rotação, logout, `me`, troca de senha, ponto eletrônico (`/sessoes-acesso`: registro aberto no login, sinal de vida, pendentes, carga horária da equipe para ADMIN/GESTOR e ajuste de saída) |
 | `escritorio` | Dados do tenant e matriz de permissões por perfil |
 | `usuario`, `setor` | Equipe, perfis, setores e carteira de empresas |
 | `empresa` | Clientes do escritório (CNPJ alfanumérico) e equipe responsável |
@@ -111,6 +111,7 @@ ativeplay-backend/
 Com `JOBS_ENABLED=true`:
 - **00:05 (horário de Brasília)** e na inicialização: gera as ocorrências do dia a partir das definições ativas (idempotente).
 - **A cada minuto:** marca `sla_violado` nas ocorrências abertas com prazo vencido e notifica os responsáveis.
+- **A cada minuto:** marca como pendentes os registros de ponto abertos sem sinal do navegador há mais de `ativeplay.ponto.pendente-minutos` minutos (padrão 15, sem entrada no `application.yml`).
 
 Com mais de uma instância da API, o ShedLock coordena as rotinas pela tabela `shedlock`, incluindo a geração na inicialização. As instâncias devem compartilhar o mesmo banco; os tempos máximos das travas devem exceder a duração dos jobs.
 

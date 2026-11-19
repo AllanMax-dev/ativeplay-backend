@@ -1,7 +1,6 @@
 package br.com.ativeplay.modules.auth.repository;
 
 import br.com.ativeplay.modules.auth.domain.RefreshToken;
-import jakarta.persistence.Column;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -17,5 +16,9 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     @Modifying
     @Query("update RefreshToken t set t.revogadoEm = :agora where t.usuarioId = :usuarioId and t.revogadoEm is null")
     int revogarTodos(UUID usuarioId, Instant agora);
+
+    @Modifying
+    @Query("update RefreshToken t set t.revogadoEm = :agora where t.sessaoAcessoId = :sessaoAcessoId and t.revogadoEm is null")
+    int revogarPorSessaoAcesso(UUID sessaoAcessoId, Instant agora);
 
 }

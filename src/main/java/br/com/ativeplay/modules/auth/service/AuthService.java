@@ -85,8 +85,7 @@ public class AuthService {
 
         auditoria.registrar(escritorio.getId(), admin.getId(), "escritorio.criar", "escritorio", escritorio.getId(),
                 null, "Escritório " + escritorio.getNome() + " cadastrado", null);
-        var sessaoAcesso = sessoesAcesso.iniciar(admin);
-        return emitirSessao(admin, ctx, sessaoAcesso.getId());
+        return emitirSessao(admin, ctx, sessoesAcesso.iniciar(admin));
     }
 
     @Transactional
@@ -99,8 +98,7 @@ public class AuthService {
         usuario.setUltimoAcesso(Instant.now());
         auditoria.registrar(usuario.getEscritorioId(), usuario.getId(), "auth.login", "usuario", usuario.getId(), null,
                 null, null);
-        var sessaoAcesso = sessoesAcesso.iniciar(usuario);
-        return emitirSessao(usuario, ctx, sessaoAcesso.getId());
+        return emitirSessao(usuario, ctx, sessoesAcesso.iniciar(usuario));
     }
 
     /** Rotação: o refresh token usado é revogado e um novo par é emitido. */
@@ -109,6 +107,10 @@ public class AuthService {
         var registro = refreshTokens.findByTokenHash(Cripto.sha256(refreshToken))
                 .orElseThrow(() -> ApiException.naoAutorizado("Sessão inválida"));
         var agora = Instant.now();
+        var sessaoAcessoId = registro.getSessaoAcessoId();
+        // ponto fechado ou pendente: o front volta ao login (sem derrubar as demais sessões do usuário)
+        if (sessaoAcessoId != null && !sessoesAcesso.aberta(sessaoAcessoId))
+            throw ApiException.naoAutorizado("Sessão encerrada");
         if (registro.getRevogadoEm() != null) {
             refreshTokens.revogarTodos(registro.getUsuarioId(), agora);
             sessoesAcesso.encerrarTodas(registro.getUsuarioId());
@@ -122,7 +124,9 @@ public class AuthService {
             throw ApiException.naoAutorizado("Usuário inativo");
 
         registro.setRevogadoEm(agora);
-        return emitirSessao(usuario, ctx, registro.getSessaoAcessoId());
+        // token anterior ao ponto (sem sid): abre o registro agora
+        return emitirSessao(usuario, ctx,
+                sessaoAcessoId != null ? sessaoAcessoId : sessoesAcesso.iniciar(usuario));
     }
 
     @Transactional
